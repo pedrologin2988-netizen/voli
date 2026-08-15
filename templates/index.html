@@ -451,7 +451,6 @@
             font-size: 13px;
         }
         
-        /* Botões flutuantes para mobile */
         .fab-group {
             display: flex;
             gap: 8px;
@@ -465,22 +464,6 @@
             min-height: 48px;
         }
         
-        /* Loading shimmer */
-        .loading-shimmer {
-            animation: shimmer 1.5s infinite;
-            background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
-            background-size: 200% 100%;
-            border-radius: 8px;
-            height: 40px;
-            margin: 4px 0;
-        }
-        
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-        
-        /* Toast notification */
         .toast {
             position: fixed;
             bottom: 20px;
@@ -504,23 +487,19 @@
             to { transform: translateX(-50%) translateY(0); opacity: 1; }
         }
         
-        /* Melhorias para inputs mobile */
         input, select, textarea {
-            font-size: 16px !important; /* Previne zoom no iOS */
+            font-size: 16px !important;
         }
         
-        /* Scroll suave */
-        .smooth-scroll {
-            scroll-behavior: smooth;
-        }
-        
-        /* Badge de contagem */
-        .count-badge {
-            background: rgba(102, 126, 234, 0.2);
-            padding: 2px 10px;
-            border-radius: 10px;
+        .filter-info {
+            background: rgba(72, 187, 120, 0.1);
+            border: 1px solid rgba(72, 187, 120, 0.2);
+            padding: 6px 12px;
+            border-radius: 8px;
             font-size: 11px;
-            color: #a8b2d1;
+            color: #68d391;
+            margin-bottom: 8px;
+            text-align: center;
         }
         
         @media (max-width: 380px) {
@@ -545,9 +524,9 @@
         </div>
         
         <div class="grid-2">
-            <!-- Área de entrada -->
             <div class="section">
                 <h2>📋 Lista de Presença</h2>
+                <div class="filter-info">✅ Apenas jogadores com ✅ ou 👍 serão processados</div>
                 <textarea id="presenceList" placeholder="Cole aqui a lista de presença..."></textarea>
                 <div class="btn-group">
                     <button class="btn btn-primary" onclick="processPresence()">🔄 Processar</button>
@@ -557,7 +536,6 @@
                 <div id="processMessage"></div>
             </div>
             
-            <!-- Configurações e jogadores -->
             <div class="section">
                 <h2>⚙️ Configurações <span class="badge">Salvas</span></h2>
                 <div class="config-row">
@@ -603,7 +581,6 @@
             </div>
         </div>
         
-        <!-- Times Gerados -->
         <div class="teams-container" id="teamsContainer" style="display:none;">
             <h2 style="font-size:1.2em; margin-bottom:10px;">🏆 Times Formados</h2>
             <div class="teams-grid" id="teamsGrid"></div>
@@ -723,7 +700,7 @@
         }
         
         // ============================================================
-        // PROCESSAR LISTA DE PRESENÇA
+        // PROCESSAR LISTA DE PRESENÇA - APENAS CONFIRMADOS (✅ ou 👍)
         // ============================================================
         function processPresence() {
             const text = document.getElementById('presenceList').value;
@@ -737,28 +714,79 @@
             const newPlayers = [];
             const updatedPlayers = [];
             
-            const playerRegex = /^(\d+)[\s\-\.\)]+\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍❌]?)/i;
+            // Regex para capturar jogadores
+            const playerRegex = /^(\d+)[\s\-\.\)]*\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)(\s*[✅👍❌]?)$/i;
             
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
                 
+                // Pular linhas que não começam com número
+                if (!/^\d/.test(trimmed)) continue;
+                
+                // Verificar se tem emoji de confirmação na linha
+                if (!/[✅👍]/.test(trimmed)) continue;
+                
                 const match = trimmed.match(playerRegex);
-                if (!match) continue;
+                if (!match) {
+                    // Tentar capturar sem o número no início
+                    const simpleMatch = trimmed.match(/^(\d+)\s*[-.)]?\s*(.+)/);
+                    if (simpleMatch) {
+                        let name = simpleMatch[2].trim();
+                        let emoji = '';
+                        
+                        const emojiMatch = name.match(/([✅👍❌])$/);
+                        if (emojiMatch) {
+                            emoji = emojiMatch[1];
+                            name = name.replace(/[✅👍❌]$/, '').trim();
+                        }
+                        
+                        // SÓ PROCESSA SE FOR CONFIRMADO (✅ ou 👍)
+                        const isConfirmed = emoji ? /[✅👍]/.test(emoji) : false;
+                        
+                        if (isConfirmed && name && name.length >= 2) {
+                            const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                            
+                            if (existing) {
+                                existing.confirmed = true;
+                                updatedPlayers.push(existing.name);
+                            } else {
+                                const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                                const position = autoAssignPosition(name);
+                                newPlayers.push({
+                                    name: name,
+                                    gender: 'M',
+                                    position: position,
+                                    level: defaultLevel,
+                                    confirmed: true
+                                });
+                            }
+                            found++;
+                        }
+                    }
+                    continue;
+                }
                 
                 let name = match[2].trim();
-                const emoji = match[3] || '';
+                let emoji = match[3] ? match[3].trim() : '';
                 
+                name = name.replace(/[✅👍❌]/g, '').trim();
+                
+                // Verificar se tem emoji de confirmação
                 const isConfirmed = /[✅👍]/.test(emoji);
                 const isNotConfirmed = /[❌]/.test(emoji);
                 const confirmed = isConfirmed && !isNotConfirmed;
                 
-                name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-]/g, '').trim();
+                // SÓ PROCESSA SE FOR CONFIRMADO (✅ ou 👍)
+                if (!confirmed) continue;
+                
+                name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/g, '').trim();
+                
                 if (!name || name.length < 2) continue;
                 
                 const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
                 if (existing) {
-                    existing.confirmed = confirmed;
+                    existing.confirmed = true;
                     updatedPlayers.push(existing.name);
                 } else {
                     const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
@@ -768,10 +796,56 @@
                         gender: 'M',
                         position: position,
                         level: defaultLevel,
-                        confirmed: confirmed
+                        confirmed: true
                     });
                 }
                 found++;
+            }
+            
+            // Método alternativo APENAS CONFIRMADOS
+            if (found === 0) {
+                const altRegex = /(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+)/i;
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    
+                    // Verificar se tem emoji de confirmação
+                    if (!/[✅👍]/.test(trimmed)) continue;
+                    
+                    const match = trimmed.match(altRegex);
+                    if (match) {
+                        let name = match[2].trim();
+                        let emoji = '';
+                        
+                        const emojiMatch = name.match(/([✅👍❌])$/);
+                        if (emojiMatch) {
+                            emoji = emojiMatch[1];
+                            name = name.replace(/[✅👍❌]$/, '').trim();
+                        }
+                        
+                        const isConfirmed = emoji ? /[✅👍]/.test(emoji) : false;
+                        
+                        if (isConfirmed) {
+                            name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/g, '').trim();
+                            
+                            if (name && name.length >= 2) {
+                                const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                                if (!existing) {
+                                    const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                                    const position = autoAssignPosition(name);
+                                    newPlayers.push({
+                                        name: name,
+                                        gender: 'M',
+                                        position: position,
+                                        level: defaultLevel,
+                                        confirmed: true
+                                    });
+                                    found++;
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             if (newPlayers.length > 0) {
@@ -782,7 +856,14 @@
             updateUI();
             
             const confirmedCount = players.filter(p => p.confirmed).length;
-            showToast(`✅ ${found} jogadores processados! Confirmados: ${confirmedCount}`);
+            const totalCount = players.length;
+            
+            let msg = `✅ Processado! ${found} jogadores confirmados encontrados.`;
+            msg += `\nConfirmados: ${confirmedCount} de ${totalCount}.`;
+            if (newPlayers.length > 0) msg += `\nNovos: ${newPlayers.length}`;
+            if (updatedPlayers.length > 0) msg += `\nAtualizados: ${updatedPlayers.length}`;
+            
+            showToast(msg);
             document.getElementById('presenceList').value = '';
         }
         
@@ -1090,7 +1171,6 @@
             document.getElementById('playerCount').textContent = players.length;
             document.getElementById('totalPlayersDisplay').textContent = confirmed.length;
             
-            // Distribuição de posições
             const posCount = { Levantador: 0, Ponteiro: 0, Oposto: 0, Central: 0, Líbero: 0 };
             players.forEach(p => {
                 if (posCount[p.position] !== undefined) posCount[p.position]++;
@@ -1157,7 +1237,7 @@
             clearTimeout(toastTimeout);
             toastTimeout = setTimeout(() => {
                 toast.remove();
-            }, 3000);
+            }, 4000);
         }
         
         function copyTeams() {
@@ -1204,9 +1284,15 @@
         1-wesley
         2-rafa ✅
         3-weverton
+        4- Santiago 
+        5-
         
         Espera
-        1-  `;
+        1-  
+        2-
+        3- 
+        4-  
+        5-`;
             
             document.getElementById('presenceList').value = example;
             showToast('📝 Exemplo carregado! Clique em Processar');
@@ -1226,7 +1312,6 @@
                 });
         }
         
-        // Prevenir zoom em inputs no iOS
         document.addEventListener('touchstart', function() {}, { passive: true });
         
         init();
