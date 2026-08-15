@@ -605,6 +605,9 @@
         let teams = [];
         let toastTimeout = null;
         
+        console.log('🚀 App iniciado!');
+        console.log('📍 API_URL:', API_URL);
+        
         // ============================================================
         // FUNÇÕES DA API
         // ============================================================
@@ -616,11 +619,14 @@
                 };
                 if (data) options.body = JSON.stringify(data);
                 
+                console.log(`📡 Chamando API: ${method} ${endpoint}`);
                 const response = await fetch(`${API_URL}${endpoint}`, options);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
+                const result = await response.json();
+                console.log(`✅ API ${endpoint} respondeu:`, result);
+                return result;
             } catch (error) {
-                console.error('Erro na API:', error);
+                console.error('❌ Erro na API:', error);
                 throw error;
             }
         }
@@ -648,6 +654,7 @@
                     level: p.level || 3,
                     confirmed: p.confirmed !== undefined ? p.confirmed : true
                 }));
+                console.log('👥 Jogadores carregados:', players.length);
                 updateUI();
                 return true;
             } catch (error) {
@@ -700,50 +707,69 @@
         }
         
         // ============================================================
-        // PROCESSAR LISTA DE PRESENÇA - VERSÃO CORRIGIDA
+        // PROCESSAR LISTA DE PRESENÇA - COM DEBUG
         // ============================================================
         function processPresence() {
+            console.log('🔄 processPresence() chamada!');
+            
             const text = document.getElementById('presenceList').value;
+            console.log('📝 Texto da lista:', text.substring(0, 200) + '...');
+            
             if (!text.trim()) {
                 showToast('Por favor, cole uma lista de presença!');
+                console.log('⚠️ Lista vazia!');
                 return;
             }
             
             const lines = text.split('\n');
+            console.log(`📄 Total de linhas: ${lines.length}`);
+            
             let found = 0;
             const newPlayers = [];
             const updatedPlayers = [];
             
             // Para cada linha do texto
-            for (const line of lines) {
-                const trimmed = line.trim();
+            for (let i = 0; i < lines.length; i++) {
+                const trimmed = lines[i].trim();
                 if (!trimmed) continue;
                 
-                // Verifica se a linha começa com um número (1-, 2-, etc)
+                // Verifica se a linha começa com um número
                 const numberMatch = trimmed.match(/^(\d+)/);
-                if (!numberMatch) continue;
+                if (!numberMatch) {
+                    console.log(`⏭️ Linha ${i}: sem número - "${trimmed}"`);
+                    continue;
+                }
                 
-                // Verifica se tem emoji de confirmação (✅ ou 👍)
+                // Verifica se tem emoji de confirmação
                 const hasConfirm = /[✅👍]/.test(trimmed);
-                if (!hasConfirm) continue;
+                if (!hasConfirm) {
+                    console.log(`⏭️ Linha ${i}: sem confirmação - "${trimmed}"`);
+                    continue;
+                }
                 
-                // Extrai o nome: remove o número, remove emojis, remove caracteres especiais
+                console.log(`✅ Linha ${i}: encontrou confirmado - "${trimmed}"`);
+                
+                // Extrai o nome
                 let name = trimmed;
                 
-                // Remove o número inicial (ex: "1-", "2-", "12-", "12.")
+                // Remove o número inicial
                 name = name.replace(/^\d+[\s\-\.\)]*\s*/, '');
                 
                 // Remove emojis
                 name = name.replace(/[✅👍❌]/g, '');
                 
-                // Remove caracteres especiais, mantém letras, espaços, pontos e hífens
+                // Remove caracteres especiais
                 name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '');
                 
                 // Remove espaços extras
                 name = name.trim();
                 
-                // Pula se nome for muito curto
-                if (!name || name.length < 2) continue;
+                console.log(`📝 Nome extraído: "${name}"`);
+                
+                if (!name || name.length < 2) {
+                    console.log(`⏭️ Nome muito curto: "${name}"`);
+                    continue;
+                }
                 
                 // Verifica se já existe
                 const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
@@ -751,6 +777,7 @@
                 if (existing) {
                     existing.confirmed = true;
                     updatedPlayers.push(existing.name);
+                    console.log(`♻️ Jogador atualizado: ${name}`);
                 } else {
                     const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
                     const position = autoAssignPosition(name);
@@ -761,32 +788,31 @@
                         level: defaultLevel,
                         confirmed: true
                     });
+                    console.log(`🆕 Novo jogador: ${name} - ${position} - ⭐${defaultLevel}`);
                 }
                 found++;
             }
             
-            // Se não encontrou nada, tenta método alternativo mais simples
+            console.log(`📊 Total encontrado: ${found}`);
+            console.log(`🆕 Novos jogadores: ${newPlayers.length}`);
+            console.log(`♻️ Atualizados: ${updatedPlayers.length}`);
+            
+            // Se não encontrou nada, tenta método alternativo
             if (found === 0) {
-                // Tenta capturar qualquer linha que tenha ✅ ou 👍
+                console.log('🔄 Tentando método alternativo...');
                 for (const line of lines) {
                     const trimmed = line.trim();
                     if (!trimmed) continue;
                     if (!/[✅👍]/.test(trimmed)) continue;
                     
-                    // Tenta extrair o nome
                     let name = trimmed;
-                    
-                    // Remove números no início
                     name = name.replace(/^\d+[\s\-\.\)]*\s*/, '');
-                    
-                    // Remove emojis
                     name = name.replace(/[✅👍❌]/g, '');
-                    
-                    // Limpa caracteres especiais
                     name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '');
                     name = name.trim();
                     
                     if (name && name.length >= 2) {
+                        console.log(`📝 Alternativo encontrou: "${name}"`);
                         const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
                         if (!existing) {
                             const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
@@ -802,11 +828,13 @@
                         }
                     }
                 }
+                console.log(`📊 Método alternativo encontrou: ${found}`);
             }
             
             // Adiciona os novos jogadores
             if (newPlayers.length > 0) {
                 players = [...players, ...newPlayers];
+                console.log(`✅ ${newPlayers.length} novos jogadores adicionados`);
             }
             
             // Salva e atualiza
@@ -821,6 +849,7 @@
             if (newPlayers.length > 0) msg += `\nNovos: ${newPlayers.length}`;
             if (updatedPlayers.length > 0) msg += `\nAtualizados: ${updatedPlayers.length}`;
             
+            console.log(`📊 ${msg}`);
             showToast(msg);
             document.getElementById('presenceList').value = '';
         }
@@ -875,25 +904,34 @@
         // GERAR TIMES
         // ============================================================
         function generateTeams() {
+            console.log('🎯 generateTeams() chamada!');
+            console.log(`👥 Jogadores disponíveis: ${players.length}`);
+            
             const numTeams = parseInt(document.getElementById('numTeams').value) || 4;
             const playersPerTeam = parseInt(document.getElementById('playersPerTeam').value) || 6;
             const balanceGender = document.getElementById('balanceGender').checked;
             const autoFill = document.getElementById('autoFill').checked;
             const totalNeeded = numTeams * playersPerTeam;
             
+            console.log(`📊 Config: ${numTeams} times x ${playersPerTeam} jogadores = ${totalNeeded} total`);
+            
             let available = players.filter(p => p.confirmed !== false);
+            console.log(`👥 Confirmados: ${available.length}`);
             
             if (available.length < totalNeeded && autoFill) {
                 const needed = totalNeeded - available.length;
+                console.log(`➕ Adicionando ${needed} jogadores fictícios`);
                 addFakePlayersInternal(needed);
                 available = players.filter(p => p.confirmed !== false);
             }
             
             if (available.length < totalNeeded) {
                 showToast(`⚠️ Faltam ${totalNeeded - available.length} jogadores`);
+                console.log(`❌ Faltam ${totalNeeded - available.length} jogadores`);
                 return;
             }
             
+            // Resto do código de geração de times...
             let setters = available.filter(p => p.position === 'Levantador');
             if (setters.length < numTeams) {
                 const nonSetters = available.filter(p => p.position !== 'Levantador');
@@ -1253,6 +1291,7 @@
         5-`;
             
             document.getElementById('presenceList').value = example;
+            console.log('📝 Exemplo carregado!');
             showToast('📝 Exemplo carregado! Clique em Processar');
         }
         
@@ -1260,9 +1299,11 @@
         // INICIALIZAÇÃO
         // ============================================================
         async function init() {
+            console.log('🔄 Inicializando app...');
             await checkApiStatus();
             await loadConfigFromServer();
             await loadPlayersFromServer();
+            console.log('✅ App inicializado!');
             
             document.querySelectorAll('#numTeams, #playersPerTeam, #balanceGender, #autoFill, #defaultLevel')
                 .forEach(el => {
