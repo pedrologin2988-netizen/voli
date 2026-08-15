@@ -1,128 +1,1133 @@
-// ============================================================
-// PROCESSAR LISTA DE PRESENÇA - VERSÃO ULTRA SIMPLES
-// ============================================================
-function processPresence() {
-    console.log('🔄 processPresence() chamada!');
-    
-    const text = document.getElementById('presenceList').value;
-    console.log('📝 Texto recebido (primeiros 200 caracteres):', text.substring(0, 200));
-    
-    if (!text || !text.trim()) {
-        showToast('⚠️ Por favor, cole uma lista de presença!');
-        return;
-    }
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🏐 Formador de Times</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            padding: 10px;
+            color: #e2e8f0;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            background: linear-gradient(135deg, #667eea, #764ba2, #f093fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+            padding-bottom: 12px;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 8px 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+        .status-bar .api-status { padding: 2px 10px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+        .status-bar .api-status.online { background: #48bb78; color: white; }
+        .status-bar .api-status.offline { background: #fc8181; color: white; }
+        .status-bar .saved { color: #48bb78; }
+        .grid-2 { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .section h2 {
+            color: #a8b2d1;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section h2 .badge {
+            font-size: 10px;
+            background: #667eea;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 10px;
+            -webkit-text-fill-color: white;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+            transition: all 0.3s;
+            -webkit-appearance: none;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            margin: 3px;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .btn-success { background: linear-gradient(135deg, #48bb78, #38a169); }
+        .btn-danger { background: linear-gradient(135deg, #fc8181, #f56565); }
+        .btn-warning { background: linear-gradient(135deg, #ed8936, #dd6b20); }
+        .btn-info { background: linear-gradient(135deg, #4299e1, #3182ce); }
+        .btn-pink { background: linear-gradient(135deg, #ed64a6, #b83280); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; min-height: 32px; }
+        .btn-group { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+        .btn-group .btn { flex: 1; min-width: 60px; }
+        .player-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border-radius: 10px;
+            padding: 3px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .player-list::-webkit-scrollbar { width: 4px; }
+        .player-list::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.03); border-radius: 10px; }
+        .player-list::-webkit-scrollbar-thumb { background: #667eea; border-radius: 10px; }
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+            transition: all 0.2s;
+            flex-wrap: wrap;
+            gap: 4px;
+            touch-action: manipulation;
+        }
+        .player-item .info { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+        .player-item .name { font-weight: 600; font-size: 13px; min-width: 50px; }
+        .player-item .gender { font-size: 13px; }
+        .player-item .position-tag {
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .player-item .position-tag.setter { background: rgba(237, 137, 54, 0.3); color: #f6ad55; }
+        .player-item .position-tag.passador { background: rgba(102, 126, 234, 0.3); color: #a8b2d1; }
+        .player-item .stars { color: #f6ad55; letter-spacing: 0.5px; font-size: 10px; }
+        .player-item select {
+            background: rgba(0, 0, 0, 0.4);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-size: 10px;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 28px;
+        }
+        .player-item select:focus { outline: none; border-color: #667eea; }
+        .player-item .remove-btn {
+            background: #fc8181;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            line-height: 24px;
+            text-align: center;
+            touch-action: manipulation;
+            flex-shrink: 0;
+        }
+        .player-item .remove-btn:active { transform: scale(0.9); }
+        .player-item .confirmed { color: #48bb78; font-size: 12px; }
+        .player-item .not-confirmed { color: #fc8181; font-size: 12px; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin: 8px 0;
+            font-size: 12px;
+            text-align: center;
+        }
+        .stats .value { color: #667eea; font-weight: 700; display: block; font-size: 16px; }
+        .stats .label { font-size: 10px; color: #a8b2d1; }
+        .position-distribution {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
+            margin: 8px 0;
+            font-size: 10px;
+        }
+        .position-distribution .pos-item {
+            background: rgba(255,255,255,0.04);
+            padding: 4px;
+            text-align: center;
+            border-radius: 6px;
+        }
+        .position-distribution .pos-item .count {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 14px;
+            display: block;
+        }
+        .config-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 6px 0;
+        }
+        .config-row label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #a8b2d1;
+        }
+        .config-row input[type="number"] {
+            width: 45px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 4px 6px;
+            font-size: 13px;
+            -webkit-appearance: none;
+        }
+        .config-row input[type="checkbox"] {
+            accent-color: #667eea;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .config-row select {
+            background: rgba(0, 0, 0, 0.3);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            -webkit-appearance: none;
+        }
+        .teams-container { margin-top: 20px; border-top: 2px solid rgba(255, 255, 255, 0.06); padding-top: 20px; }
+        .teams-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        @media (min-width: 480px) {
+            .teams-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        .team-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.2s;
+        }
+        .team-card:active { transform: scale(0.98); }
+        .team-card h3 {
+            color: #a8b2d1;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.15);
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        .team-card .player {
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .team-card .player:last-child { border-bottom: none; }
+        .team-card .avg {
+            font-weight: 600;
+            color: #667eea;
+            margin-top: 8px;
+            text-align: right;
+            font-size: 12px;
+        }
+        .copy-area {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 12px;
+            position: relative;
+        }
+        .copy-area textarea { height: 120px; font-size: 11px; }
+        .copy-area .btn { position: static; margin-top: 10px; width: 100%; }
+        .warning, .success {
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin: 6px 0;
+            font-size: 12px;
+        }
+        .warning { background: rgba(214, 158, 46, 0.12); border-left: 3px solid #d69e2e; color: #f6ad55; }
+        .success { background: rgba(72, 187, 120, 0.12); border-left: 3px solid #48bb78; color: #68d391; }
+        .empty-state { text-align: center; padding: 20px 10px; color: #a8b2d1; font-size: 13px; }
+        .fab-group { display: flex; gap: 8px; margin: 10px 0; }
+        .fab-group .btn { flex: 1; padding: 12px; font-size: 13px; min-height: 48px; }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            max-width: 90%;
+            text-align: center;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        input, select, textarea { font-size: 16px !important; }
+        .filter-info {
+            background: rgba(72, 187, 120, 0.1);
+            border: 1px solid rgba(72, 187, 120, 0.2);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #68d391;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .rules-box {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #a8b2d1;
+            margin-top: 8px;
+        }
+        .rules-box strong { color: #f6ad55; }
+        @media (max-width: 380px) {
+            .player-item .info { gap: 3px; }
+            .player-item .name { font-size: 12px; min-width: 40px; }
+            .player-item select { font-size: 9px; padding: 1px 4px; }
+            .btn { font-size: 12px; padding: 8px 12px; min-height: 38px; }
+            .stats { grid-template-columns: repeat(3, 1fr); font-size: 10px; }
+            .stats .value { font-size: 14px; }
+            .position-distribution { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏐 Formador de Times</h1>
+        
+        <div class="status-bar">
+            <span>💾 <span id="apiStatus" class="api-status offline">⏳</span></span>
+            <span class="saved" id="statusSave">✅ Dados salvos</span>
+            <span>👥 <span id="totalPlayersDisplay">0</span></span>
+        </div>
+        
+        <div class="grid-2">
+            <div class="section">
+                <h2>📋 Lista de Presença</h2>
+                <div class="filter-info">✅ Apenas jogadores com ✅ ou 👍 serão processados</div>
+                <textarea id="presenceList" placeholder="Cole aqui a lista de presença..."></textarea>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="processPresence()">🔄 Processar</button>
+                    <button class="btn btn-success btn-sm" onclick="loadExample()">📝 Exemplo</button>
+                    <button class="btn btn-danger btn-sm" onclick="clearAllPlayers()">🗑️</button>
+                </div>
+                <div id="processMessage"></div>
+            </div>
+            
+            <div class="section">
+                <h2>⚙️ Configurações <span class="badge">Salvas</span></h2>
+                <div class="config-row">
+                    <label>👥 Times: <input type="number" id="numTeams" value="4" min="2" max="6" /></label>
+                    <label>👤 Por time: <input type="number" id="playersPerTeam" value="6" min="4" max="8" /></label>
+                </div>
+                <div class="config-row">
+                    <label><input type="checkbox" id="balanceGender" checked /> Equilibrar Gênero</label>
+                    <label><input type="checkbox" id="autoFill" checked /> Preencher faltantes</label>
+                </div>
+                <div class="config-row">
+                    <label>Nível padrão: 
+                        <select id="defaultLevel">
+                            <option value="1">⭐1</option>
+                            <option value="2">⭐2</option>
+                            <option value="3" selected>⭐3</option>
+                            <option value="4">⭐4</option>
+                            <option value="5">⭐5</option>
+                        </select>
+                    </label>
+                    <button class="btn btn-info btn-sm" onclick="saveConfig()">💾</button>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+                    <h2 style="margin:0; font-size:1em;">👥 Jogadores <span class="badge" id="playerCount">0</span></h2>
+                    <button class="btn btn-warning btn-sm" onclick="autoAssignPositions()">🔄 Auto Posições</button>
+                </div>
+                
+                <div class="position-distribution" id="positionDist">
+                    <div class="pos-item"><span class="count" id="countSetter">0</span>🏐 Levantador</div>
+                    <div class="pos-item"><span class="count" id="countPassador">0</span>🏐 Passador</div>
+                </div>
+                
+                <div class="player-list" id="playerList"></div>
+                
+                <div class="fab-group">
+                    <button class="btn btn-success" onclick="generateTeams()">🎯 Gerar Times</button>
+                    <button class="btn btn-pink btn-sm" onclick="addFakePlayers()">➕ Faltantes</button>
+                </div>
+                
+                <div class="rules-box">
+                    <strong>📌 Regras:</strong><br>
+                    • 1 Levantador por time (máximo)<br>
+                    • Restante são Passadores<br>
+                    • Times equilibrados por nível (⭐)
+                </div>
+            </div>
+        </div>
+        
+        <div class="teams-container" id="teamsContainer" style="display:none;">
+            <h2 style="font-size:1.2em; margin-bottom:10px;">🏆 Times Formados</h2>
+            <div class="teams-grid" id="teamsGrid"></div>
+            
+            <div class="copy-area">
+                <button class="btn btn-success" onclick="copyTeams()">📋 Copiar Times</button>
+                <textarea id="teamsText" readonly></textarea>
+            </div>
+        </div>
+    </div>
 
-    // Divide o texto em linhas
-    const lines = text.split('\n');
-    console.log(`📄 Total de linhas: ${lines.length}`);
-    
-    let encontrados = 0;
-    const novosJogadores = [];
-    const jogadoresAtualizados = [];
+    <script>
+        // ============================================================
+        // CONFIGURAÇÃO
+        // ============================================================
+        const API_URL = window.location.origin;
+        let players = [];
+        let teams = [];
+        let toastTimeout = null;
 
-    // Para CADA linha do texto
-    for (let i = 0; i < lines.length; i++) {
-        const linha = lines[i].trim();
-        if (!linha) continue;
-
-        // Procura por: NÚMERO + NOME + ✅ ou 👍
-        // Exemplos: "1- DAN✅", "3- MARCOS✅", "15- HELTON👍"
-        const regex = /^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍])/;
-        const match = linha.match(regex);
-
-        if (match) {
-            const numero = match[1];
-            let nome = match[2].trim();
-            const emoji = match[3];
-
-            // Limpa o nome: remove caracteres especiais, mantém letras, espaços, pontos
-            nome = nome.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
-
-            console.log(`✅ Linha ${i+1}: Número ${numero} - Nome: "${nome}" - Emoji: ${emoji}`);
-
-            if (nome && nome.length >= 2) {
-                // Verifica se já existe
-                const existe = players.find(p => p.name.toLowerCase() === nome.toLowerCase());
-
-                if (existe) {
-                    existe.confirmed = true;
-                    jogadoresAtualizados.push(nome);
-                    console.log(`♻️ Jogador atualizado: ${nome}`);
-                } else {
-                    const nivelPadrao = parseInt(document.getElementById('defaultLevel').value) || 3;
-                    const posicao = autoAssignPosition(nome);
-                    const genero = Math.random() > 0.5 ? 'M' : 'F';
-                    
-                    novosJogadores.push({
-                        name: nome,
-                        gender: genero,
-                        position: posicao,
-                        level: nivelPadrao,
-                        confirmed: true
-                    });
-                    console.log(`🆕 Novo jogador: ${nome} - ${posicao} - ⭐${nivelPadrao}`);
-                }
-                encontrados++;
+        // Posições disponíveis (apenas 2)
+        const POSITIONS = ['Levantador', 'Passador'];
+        
+        // ============================================================
+        // API
+        // ============================================================
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const options = { method, headers: { 'Content-Type': 'application/json' } };
+                if (data) options.body = JSON.stringify(data);
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error('Erro na API:', error);
+                throw error;
             }
-        } else {
-            // Se não encontrou com a regex, tenta um método mais simples
-            // Verifica se a linha tem ✅ ou 👍 e tenta extrair o nome
-            if (linha.includes('✅') || linha.includes('👍')) {
-                let nome = linha;
-                // Remove o número no início
-                nome = nome.replace(/^\d+\s*[-.)]?\s*/, '');
-                // Remove emojis
-                nome = nome.replace(/[✅👍❌]/g, '');
-                // Remove caracteres especiais
-                nome = nome.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '');
-                nome = nome.trim();
-
-                if (nome && nome.length >= 2) {
-                    console.log(`📝 Linha ${i+1} (alternativo): "${nome}"`);
+        }
+        
+        async function checkApiStatus() {
+            try {
+                await apiCall('/api/players');
+                document.getElementById('apiStatus').textContent = '✅ Online';
+                document.getElementById('apiStatus').className = 'api-status online';
+                return true;
+            } catch {
+                document.getElementById('apiStatus').textContent = '❌ Offline';
+                document.getElementById('apiStatus').className = 'api-status offline';
+                return false;
+            }
+        }
+        
+        async function loadPlayersFromServer() {
+            try {
+                const data = await apiCall('/api/players');
+                players = data.map(p => ({
+                    ...p,
+                    gender: p.gender || 'M',
+                    position: p.position || 'Passador',
+                    level: p.level || 3,
+                    confirmed: p.confirmed !== undefined ? p.confirmed : true
+                }));
+                updateUI();
+                return true;
+            } catch (error) {
+                console.error('Erro ao carregar:', error);
+                return false;
+            }
+        }
+        
+        async function savePlayersToServer() {
+            try {
+                await apiCall('/api/players', 'POST', players);
+                document.getElementById('statusSave').textContent = '✅ Salvo';
+                return true;
+            } catch (error) {
+                console.error('Erro ao salvar:', error);
+                document.getElementById('statusSave').textContent = '❌ Erro';
+                return false;
+            }
+        }
+        
+        async function loadConfigFromServer() {
+            try {
+                const config = await apiCall('/api/config');
+                document.getElementById('numTeams').value = config.numTeams || 4;
+                document.getElementById('playersPerTeam').value = config.playersPerTeam || 6;
+                document.getElementById('balanceGender').checked = config.balanceGender !== false;
+                document.getElementById('autoFill').checked = config.autoFill !== false;
+                document.getElementById('defaultLevel').value = config.defaultLevel || 3;
+                return true;
+            } catch {
+                return false;
+            }
+        }
+        
+        async function saveConfig() {
+            const config = {
+                numTeams: parseInt(document.getElementById('numTeams').value) || 4,
+                playersPerTeam: parseInt(document.getElementById('playersPerTeam').value) || 6,
+                balanceGender: document.getElementById('balanceGender').checked,
+                autoFill: document.getElementById('autoFill').checked,
+                defaultLevel: parseInt(document.getElementById('defaultLevel').value) || 3
+            };
+            try {
+                await apiCall('/api/config', 'POST', config);
+                showToast('✅ Configurações salvas!');
+            } catch (error) {
+                console.error('Erro ao salvar config:', error);
+                showToast('❌ Erro ao salvar configurações');
+            }
+        }
+        
+        // ============================================================
+        // PROCESSAR LISTA
+        // ============================================================
+        function processPresence() {
+            console.log('🔄 Processando lista...');
+            
+            const text = document.getElementById('presenceList').value;
+            if (!text.trim()) {
+                showToast('Por favor, cole uma lista de presença!');
+                return;
+            }
+            
+            const lines = text.split('\n');
+            let found = 0;
+            const newPlayers = [];
+            const updatedPlayers = [];
+            
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                
+                // Procura por: número + nome + ✅ ou 👍
+                const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍])/);
+                
+                if (match) {
+                    const name = match[2].trim();
+                    const cleanName = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
                     
-                    const existe = players.find(p => p.name.toLowerCase() === nome.toLowerCase());
-                    if (!existe) {
-                        const nivelPadrao = parseInt(document.getElementById('defaultLevel').value) || 3;
-                        const posicao = autoAssignPosition(nome);
-                        const genero = Math.random() > 0.5 ? 'M' : 'F';
+                    if (cleanName && cleanName.length >= 2) {
+                        console.log(`✅ Encontrado: ${cleanName}`);
                         
-                        novosJogadores.push({
-                            name: nome,
-                            gender: genero,
-                            position: posicao,
-                            level: nivelPadrao,
-                            confirmed: true
-                        });
-                        console.log(`🆕 Novo jogador (alternativo): ${nome}`);
-                        encontrados++;
+                        const existing = players.find(p => p.name.toLowerCase() === cleanName.toLowerCase());
+                        
+                        if (existing) {
+                            existing.confirmed = true;
+                            updatedPlayers.push(existing.name);
+                        } else {
+                            const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                            const position = autoAssignPosition(cleanName);
+                            newPlayers.push({
+                                name: cleanName,
+                                gender: Math.random() > 0.5 ? 'M' : 'F',
+                                position: position,
+                                level: defaultLevel,
+                                confirmed: true
+                            });
+                        }
+                        found++;
                     }
                 }
             }
+            
+            // Método alternativo
+            if (found === 0) {
+                console.log('🔄 Tentando método alternativo...');
+                
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    if (!/[✅👍]/.test(trimmed)) continue;
+                    
+                    let name = trimmed.replace(/^\d+\s*[-.)]?\s*/, '');
+                    name = name.replace(/[✅👍❌]/g, '').trim();
+                    name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
+                    
+                    if (name && name.length >= 2) {
+                        console.log(`📝 Alternativo: ${name}`);
+                        
+                        const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                        if (!existing) {
+                            const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                            const position = autoAssignPosition(name);
+                            newPlayers.push({
+                                name: name,
+                                gender: Math.random() > 0.5 ? 'M' : 'F',
+                                position: position,
+                                level: defaultLevel,
+                                confirmed: true
+                            });
+                            found++;
+                        }
+                    }
+                }
+            }
+            
+            if (newPlayers.length > 0) {
+                players = [...players, ...newPlayers];
+            }
+            
+            savePlayersToServer();
+            updateUI();
+            
+            const confirmedCount = players.filter(p => p.confirmed).length;
+            
+            let msg = `✅ Processado! ${found} jogadores confirmados encontrados.`;
+            msg += `\nTotal: ${confirmedCount} jogadores.`;
+            if (newPlayers.length > 0) msg += `\nNovos: ${newPlayers.length}`;
+            if (updatedPlayers.length > 0) msg += `\nAtualizados: ${updatedPlayers.length}`;
+            
+            console.log(msg);
+            showToast(msg);
+            document.getElementById('presenceList').value = '';
         }
-    }
-
-    console.log(`📊 Total de jogadores encontrados: ${encontrados}`);
-    console.log(`🆕 Novos: ${novosJogadores.length}`);
-    console.log(`♻️ Atualizados: ${jogadoresAtualizados.length}`);
-
-    // Adiciona os novos jogadores
-    if (novosJogadores.length > 0) {
-        players = [...players, ...novosJogadores];
-        console.log(`✅ ${novosJogadores.length} novos jogadores adicionados`);
-    }
-
-    // Salva e atualiza
-    savePlayersToServer();
-    updateUI();
-
-    const confirmados = players.filter(p => p.confirmed).length;
-
-    let msg = `✅ Processado! ${encontrados} jogadores confirmados encontrados.`;
-    msg += `\nTotal: ${confirmados} jogadores.`;
-    if (novosJogadores.length > 0) msg += `\n🆕 Novos: ${novosJogadores.length}`;
-    if (jogadoresAtualizados.length > 0) msg += `\n♻️ Atualizados: ${jogadoresAtualizados.length}`;
-
-    console.log(`📊 ${msg}`);
-    showToast(msg);
-    document.getElementById('presenceList').value = '';
-}
+        
+        // ============================================================
+        // ATRIBUIR POSIÇÃO (Apenas 2 opções)
+        // ============================================================
+        function autoAssignPosition(name) {
+            const nameLower = name.toLowerCase();
+            
+            if (nameLower.includes('levanta') || nameLower.includes('setter') || nameLower.includes('armador')) {
+                return 'Levantador';
+            }
+            
+            // Distribuição: 20% levantador, 80% passador
+            return Math.random() < 0.2 ? 'Levantador' : 'Passador';
+        }
+        
+        function autoAssignPositions() {
+            if (players.length === 0) {
+                showToast('⚠️ Nenhum jogador cadastrado!');
+                return;
+            }
+            
+            // Distribuição: 20% Levantador, 80% Passador
+            const shuffled = shuffle([...players]);
+            const total = shuffled.length;
+            const numSetters = Math.max(1, Math.round(total * 0.2));
+            
+            shuffled.forEach((player, index) => {
+                if (index < numSetters) {
+                    player.position = 'Levantador';
+                } else {
+                    player.position = 'Passador';
+                }
+            });
+            
+            savePlayersToServer();
+            updateUI();
+            showToast('✅ Posições atribuídas!');
+        }
+        
+        // ============================================================
+        // GERAR TIMES
+        // ============================================================
+        function generateTeams() {
+            const numTeams = parseInt(document.getElementById('numTeams').value) || 4;
+            const playersPerTeam = parseInt(document.getElementById('playersPerTeam').value) || 6;
+            const balanceGender = document.getElementById('balanceGender').checked;
+            const autoFill = document.getElementById('autoFill').checked;
+            const totalNeeded = numTeams * playersPerTeam;
+            
+            let available = players.filter(p => p.confirmed !== false);
+            
+            console.log(`👥 Jogadores disponíveis: ${available.length}`);
+            
+            if (available.length < totalNeeded && autoFill) {
+                const needed = totalNeeded - available.length;
+                console.log(`➕ Adicionando ${needed} jogadores fictícios`);
+                addFakePlayersInternal(needed);
+                available = players.filter(p => p.confirmed !== false);
+            }
+            
+            if (available.length < totalNeeded) {
+                showToast(`⚠️ Faltam ${totalNeeded - available.length} jogadores`);
+                return;
+            }
+            
+            // Garantir que cada time tenha 1 levantador
+            let setters = available.filter(p => p.position === 'Levantador');
+            let passadores = available.filter(p => p.position === 'Passador');
+            
+            // Se não houver levantadores suficientes, converter alguns passadores
+            if (setters.length < numTeams) {
+                const needed = numTeams - setters.length;
+                for (let i = 0; i < Math.min(needed, passadores.length); i++) {
+                    passadores[i].position = 'Levantador';
+                }
+                setters = available.filter(p => p.position === 'Levantador');
+                passadores = available.filter(p => p.position === 'Passador');
+            }
+            
+            // Embaralhar cada grupo
+            setters = shuffle(setters);
+            passadores = shuffle(passadores);
+            
+            // Inicializar times
+            teams = [];
+            for (let i = 0; i < numTeams; i++) {
+                teams.push({ 
+                    players: [], 
+                    totalLevel: 0, 
+                    femaleCount: 0, 
+                    maleCount: 0,
+                    hasSetter: false
+                });
+            }
+            
+            // Distribuir 1 levantador por time
+            for (let i = 0; i < Math.min(setters.length, numTeams); i++) {
+                const setter = setters[i];
+                teams[i].players.push(setter);
+                teams[i].totalLevel += setter.level;
+                teams[i].hasSetter = true;
+                if (setter.gender === 'F') teams[i].femaleCount++;
+                else teams[i].maleCount++;
+            }
+            
+            // Distribuir passadores (equilibrando nível e gênero)
+            passadores.sort((a, b) => b.level - a.level);
+            
+            for (const player of passadores) {
+                let targetTeam = -1;
+                let minScore = Infinity;
+                
+                for (let i = 0; i < teams.length; i++) {
+                    const team = teams[i];
+                    if (team.players.length >= playersPerTeam) continue;
+                    
+                    if (balanceGender) {
+                        const targetPerGender = Math.floor(playersPerTeam / 2);
+                        const currentF = team.femaleCount;
+                        const currentM = team.maleCount;
+                        const remaining = playersPerTeam - team.players.length - 1;
+                        
+                        let newF = currentF + (player.gender === 'F' ? 1 : 0);
+                        let newM = currentM + (player.gender === 'M' ? 1 : 0);
+                        
+                        if (newF > targetPerGender + remaining || newM > targetPerGender + remaining) {
+                            continue;
+                        }
+                    }
+                    
+                    const score = team.totalLevel + team.players.length * 10;
+                    if (score < minScore) {
+                        minScore = score;
+                        targetTeam = i;
+                    }
+                }
+                
+                if (targetTeam === -1) {
+                    let minSize = Infinity;
+                    for (let i = 0; i < teams.length; i++) {
+                        if (teams[i].players.length < minSize) {
+                            minSize = teams[i].players.length;
+                            targetTeam = i;
+                        }
+                    }
+                }
+                
+                teams[targetTeam].players.push(player);
+                teams[targetTeam].totalLevel += player.level;
+                if (player.gender === 'F') teams[targetTeam].femaleCount++;
+                else teams[targetTeam].maleCount++;
+            }
+            
+            // Preencher times com jogadores fictícios se necessário
+            for (let i = 0; i < teams.length; i++) {
+                while (teams[i].players.length < playersPerTeam) {
+                    const gender = balanceGender ? 
+                        (teams[i].femaleCount < Math.floor(playersPerTeam / 2) ? 'F' : 'M') :
+                        (Math.random() > 0.5 ? 'M' : 'F');
+                    
+                    // Se não tiver levantador, coloca um
+                    let pos = 'Passador';
+                    if (!teams[i].hasSetter) {
+                        pos = 'Levantador';
+                        teams[i].hasSetter = true;
+                    }
+                    
+                    const level = Math.floor(Math.random() * 3) + 2;
+                    teams[i].players.push({
+                        name: `Jog ${teams[i].players.length + 1}`,
+                        gender: gender,
+                        position: pos,
+                        level: level,
+                        confirmed: true,
+                        fake: true
+                    });
+                    teams[i].totalLevel += level;
+                    if (gender === 'F') teams[i].femaleCount++;
+                    else teams[i].maleCount++;
+                }
+            }
+            
+            displayTeams();
+            showToast('✅ Times gerados!');
+        }
+        
+        // ============================================================
+        // EXIBIR TIMES
+        // ============================================================
+        function displayTeams() {
+            const container = document.getElementById('teamsContainer');
+            const grid = document.getElementById('teamsGrid');
+            const textArea = document.getElementById('teamsText');
+            
+            container.style.display = 'block';
+            grid.innerHTML = '';
+            
+            let output = '🏐 TIMES FORMADOS\n' + '='.repeat(40) + '\n\n';
+            
+            teams.forEach((team, i) => {
+                const card = document.createElement('div');
+                card.className = 'team-card';
+                const avg = (team.totalLevel / team.players.length).toFixed(1);
+                
+                // Contar posições no time
+                const setters = team.players.filter(p => p.position === 'Levantador').length;
+                const passadores = team.players.filter(p => p.position === 'Passador').length;
+                
+                card.innerHTML = `
+                    <h3>
+                        <span>🏆 Time ${i + 1}</span>
+                        <span>⭐ ${avg}</span>
+                    </h3>
+                    ${team.players.map(p => `
+                        <div class="player">
+                            <span>${p.name} ${p.gender === 'F' ? '♀' : '♂'}${p.fake ? ' 🤖' : ''}</span>
+                            <span>${p.position} ${'⭐'.repeat(p.level)}</span>
+                        </div>
+                    `).join('')}
+                    <div class="avg">
+                        ⭐ ${avg} | 👥 ${team.players.length} | 
+                        🏐${setters} Lev | 🏐${passadores} Pas |
+                        ♀${team.femaleCount} ♂${team.maleCount}
+                    </div>
+                `;
+                grid.appendChild(card);
+                
+                output += `TIME ${i + 1} (⭐${avg})\n`;
+                output += `${'-'.repeat(30)}\n`;
+                team.players.forEach(p => {
+                    output += `${p.name} (${p.gender === 'F' ? '♀' : '♂'}) - ${p.position} - ${'⭐'.repeat(p.level)}\n`;
+                });
+                output += `👥 ${team.players.length} | 🏐${setters} Lev | ♀${team.femaleCount} ♂${team.maleCount}\n\n`;
+            });
+            
+            textArea.value = output;
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // ============================================================
+        // FUNÇÕES AUXILIARES
+        // ============================================================
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+        
+        function addFakePlayers() {
+            const totalNeeded = parseInt(document.getElementById('numTeams').value) * 
+                               parseInt(document.getElementById('playersPerTeam').value);
+            const confirmed = players.filter(p => p.confirmed !== false);
+            const needed = totalNeeded - confirmed.length;
+            if (needed <= 0) {
+                showToast('✅ Já temos jogadores suficientes!');
+                return;
+            }
+            addFakePlayersInternal(needed);
+            savePlayersToServer();
+            updateUI();
+            showToast(`✅ Adicionados ${needed} jogadores!`);
+        }
+        
+        function addFakePlayersInternal(count) {
+            const names = ['Ana', 'Bruno', 'Carla', 'Diego', 'Eduarda', 'Felipe', 'Gabriela', 'Henrique', 
+                          'Isabela', 'João', 'Karina', 'Lucas', 'Mariana', 'Nicolas', 'Olivia', 'Paulo',
+                          'Rafaela', 'Samuel', 'Tatiane', 'Victor', 'Yasmin', 'André', 'Beatriz', 'Carlos'];
+            const positions = ['Passador', 'Passador', 'Passador', 'Passador', 'Levantador'];
+            const existingNames = players.map(p => p.name);
+            
+            for (let i = 0; i < count; i++) {
+                let name;
+                let attempts = 0;
+                do {
+                    const baseName = names[Math.floor(Math.random() * names.length)];
+                    name = baseName + (Math.floor(Math.random() * 100) + 1);
+                    attempts++;
+                } while (existingNames.includes(name) && attempts < 50);
+                
+                const gender = Math.random() > 0.5 ? 'M' : 'F';
+                players.push({
+                    name: name,
+                    gender: gender,
+                    position: positions[Math.floor(Math.random() * positions.length)],
+                    level: Math.floor(Math.random() * 3) + 2,
+                    confirmed: true,
+                    fake: true
+                });
+                existingNames.push(name);
+            }
+        }
+        
+        function removePlayer(index) {
+            players.splice(index, 1);
+            savePlayersToServer();
+            updateUI();
+        }
+        
+        function updatePlayer(index, field, value) {
+            if (field === 'level') value = parseInt(value);
+            players[index][field] = value;
+            savePlayersToServer();
+            updateUI();
+        }
+        
+        function clearAllPlayers() {
+            if (confirm('Remover TODOS os jogadores?')) {
+                players = [];
+                teams = [];
+                savePlayersToServer();
+                updateUI();
+                document.getElementById('teamsContainer').style.display = 'none';
+                showToast('🗑️ Todos removidos.');
+            }
+        }
+        
+        function updateUI() {
+            const list = document.getElementById('playerList');
+            list.innerHTML = '';
+            
+            const confirmed = players.filter(p => p.confirmed !== false);
+            document.getElementById('playerCount').textContent = players.length;
+            document.getElementById('totalPlayersDisplay').textContent = confirmed.length;
+            
+            // Distribuição de posições (apenas 2)
+            const posCount = { Levantador: 0, Passador: 0 };
+            players.forEach(p => {
+                if (posCount[p.position] !== undefined) posCount[p.position]++;
+            });
+            document.getElementById('countSetter').textContent = posCount.Levantador;
+            document.getElementById('countPassador').textContent = posCount.Passador;
+            
+            if (players.length === 0) {
+                list.innerHTML = '<div class="empty-state">Nenhum jogador cadastrado</div>';
+                return;
+            }
+            
+            players.forEach((p, i) => {
+                const div = document.createElement('div');
+                div.className = 'player-item';
+                const isConfirmed = p.confirmed !== false;
+                
+                const posClass = {
+                    'Levantador': 'setter',
+                    'Passador': 'passador'
+                }[p.position] || 'passador';
+                
+                div.innerHTML = `
+                    <div class="info">
+                        <span class="name">${p.name}</span>
+                        <span class="gender">${p.gender === 'F' ? '♀' : '♂'}</span>
+                        <span class="${isConfirmed ? 'confirmed' : 'not-confirmed'}">${isConfirmed ? '✅' : '❌'}</span>
+                        <span class="position-tag ${posClass}">${p.position}</span>
+                        <span class="stars">${'⭐'.repeat(p.level)}</span>
+                        <select onchange="updatePlayer(${i}, 'position', this.value)">
+                            ${['Levantador', 'Passador'].map(pos => 
+                                `<option value="${pos}" ${p.position === pos ? 'selected' : ''}>${pos}</option>`
+                            ).join('')}
+                        </select>
+                        <select onchange="updatePlayer(${i}, 'level', this.value)">
+                            ${[1,2,3,4,5].map(l => 
+                                `<option value="${l}" ${p.level === l ? 'selected' : ''}>${'⭐'.repeat(l)}</option>`
+                            ).join('')}
+                        </select>
+                        <select onchange="updatePlayer(${i}, 'gender', this.value)">
+                            <option value="M" ${p.gender === 'M' ? 'selected' : ''}>♂</option>
+                            <option value="F" ${p.gender === 'F' ? 'selected' : ''}>♀</option>
+                        </select>
+                        ${p.fake ? '🤖' : ''}
+                    </div>
+                    <button class="remove-btn" onclick="removePlayer(${i})">×</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+        
+        function showToast(msg) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.remove();
+            }, 4000);
+        }
+        
+        function copyTeams() {
+            const text = document.getElementById('teamsText');
+            text.select();
+            document.execCommand('copy');
+            showToast('📋 Times copiados!');
+        }
+        
+        // ============================================================
+        // CARREGAR EXEMPLO
+        // ============================================================
+        function loadExample() {
+            const example = `Lista de presença  15/08/28
+        Diaria: 10,00R$
+        Pix:josedaviddanalvesdasilva@gmail.com 
+        
+        1- DAN✅
+        2- NETO❌
+        3- MARCOS✅
+        4- MIGUEL ✅
+        5- GEO ✅
+        6- PEDRO.C✅
+        7- PEDRO.R✅
+        8- PEDRO.H ✅
+        9-  PEDRO.O ✅
+        10- HENRI.F✅
+        11- MIQUEIAS✅
+        12-JUNIOR JB
+        13- CACHEADO✅
+        14- ALEXANDRE ❌
+        15- HELTON👍
+        16- JAFLET ✅
+        17- TICO✅
+        18- JHOSEPH ❌
+        19- LUIX ❌
+        20- MATHEUS ✅
+        21- ANDREA ✅
+        22- ISA ✅
+        23- LYDI ✅
+        24- GIOVANA❌
+        
+        Diarista
+        1-wesley
+        2-rafa ✅
+        3-weverton
+        4- Santiago 
+        5-
+        
+        Espera
+        1-  
+        2-
+        3- 
+        4-  
+        5-`;
+            
+            document.getElementById('presenceList').value = example;
+            showToast('📝 Exemplo carregado! Clique em Processar');
+        }
+        
+        // ============================================================
+        // INICIALIZAÇÃO
+        // ============================================================
+        async function init() {
+            await checkApiStatus();
+            await loadConfigFromServer();
+            await loadPlayersFromServer();
+            
+            document.querySelectorAll('#numTeams, #playersPerTeam, #balanceGender, #autoFill, #defaultLevel')
+                .forEach(el => {
+                    el.addEventListener('change', saveConfig);
+                });
+        }
+        
+        document.addEventListener('touchstart', function() {}, { passive: true });
+        init();
+    </script>
+</body>
+</html>

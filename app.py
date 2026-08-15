@@ -1,14 +1,14 @@
 import os
 import json
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from datetime import datetime
 
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__, template_folder='templates')
 CORS(app)
 
 # ============================================================
-# DADOS EM MEMÓRIA (FUNCIONA SEMPRE)
+# DADOS EM MEMÓRIA
 # ============================================================
 players_db = []
 config_db = {
@@ -19,7 +19,7 @@ config_db = {
     'default_level': 3
 }
 
-# Tenta conectar ao Supabase, mas NÃO QUEBRA
+# Tenta conectar ao Supabase
 supabase = None
 try:
     from supabase import create_client, Client
@@ -33,7 +33,6 @@ try:
         print("⚠️  Variáveis Supabase não configuradas, usando memória")
 except Exception as e:
     print(f"⚠️  Erro ao conectar Supabase: {e}")
-    print("Usando dados em memória")
 
 # ============================================================
 # ROTAS
@@ -41,53 +40,45 @@ except Exception as e:
 
 @app.route('/')
 def index():
-    """Servir o frontend"""
+    """Servir o frontend da pasta templates"""
     try:
-        return send_from_directory('static', 'index.html')
+        return render_template('index.html')
     except Exception as e:
-        return f"Erro: {e}", 500
+        return f"Erro ao carregar index: {e}", 500
 
 @app.route('/api/players', methods=['GET'])
 def get_players():
-    """Buscar todos os jogadores"""
     try:
-        # Se tiver Supabase, tenta buscar de lá
         if supabase:
             try:
                 response = supabase.table('players').select('*').execute()
                 return jsonify(response.data), 200
             except:
                 pass
-        # Fallback: dados em memória
         return jsonify(players_db), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/players', methods=['POST'])
 def save_players():
-    """Salvar jogadores"""
     global players_db
     try:
         data = request.json
         if not isinstance(data, list):
             return jsonify({'error': 'Dados devem ser uma lista'}), 400
         
-        # Salvar na memória
         players_db = data
         
-        # Se tiver Supabase, tenta salvar lá também
         if supabase:
             try:
-                # Limpar existentes
                 supabase.table('players').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
-                # Inserir novos
                 if data:
                     clean_data = []
                     for p in data:
                         clean_data.append({
                             'name': p.get('name', ''),
                             'gender': p.get('gender', 'M'),
-                            'position': p.get('position', 'Ponteiro'),
+                            'position': p.get('position', 'Passador'),
                             'level': p.get('level', 3),
                             'confirmed': p.get('confirmed', True),
                             'fake': p.get('fake', False)
@@ -102,7 +93,6 @@ def save_players():
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
-    """Buscar configurações"""
     try:
         if supabase:
             try:
@@ -124,7 +114,6 @@ def get_config():
 
 @app.route('/api/config', methods=['POST'])
 def save_config():
-    """Salvar configurações"""
     global config_db
     try:
         data = request.json
@@ -155,7 +144,6 @@ def save_config():
 
 @app.route('/api/reset', methods=['DELETE'])
 def reset_data():
-    """Resetar dados"""
     global players_db
     players_db = []
     if supabase:
@@ -167,7 +155,6 @@ def reset_data():
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    """Estatísticas"""
     try:
         players = players_db
         stats = {
@@ -176,10 +163,7 @@ def get_stats():
             'male': sum(1 for p in players if p.get('gender') == 'M'),
             'female': sum(1 for p in players if p.get('gender') == 'F'),
             'levantadores': sum(1 for p in players if p.get('position') == 'Levantador'),
-            'ponteiros': sum(1 for p in players if p.get('position') == 'Ponteiro'),
-            'opostos': sum(1 for p in players if p.get('position') == 'Oposto'),
-            'centrais': sum(1 for p in players if p.get('position') == 'Central'),
-            'liberos': sum(1 for p in players if p.get('position') == 'Líbero'),
+            'passadores': sum(1 for p in players if p.get('position') == 'Passador'),
             'avg_level': round(sum(p.get('level', 0) for p in players) / len(players), 2) if players else 0
         }
         return jsonify(stats), 200
@@ -188,7 +172,6 @@ def get_stats():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check"""
     return jsonify({
         'status': 'healthy',
         'players': len(players_db),
@@ -200,9 +183,6 @@ def handle_error(e):
     print(f"❌ Erro: {e}")
     return jsonify({'error': str(e)}), 500
 
-# ============================================================
-# INICIALIZAÇÃO
-# ============================================================
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     print(f"🚀 Servidor rodando em http://localhost:{port}")
