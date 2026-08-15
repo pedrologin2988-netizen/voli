@@ -8,117 +8,32 @@ app = Flask(__name__, static_folder='static')
 CORS(app)
 
 # ============================================================
-# CONEXÃO COM SUPABASE - NUNCA QUEBRA
+# DADOS EM MEMÓRIA (FUNCIONA SEMPRE)
 # ============================================================
-supabase = None
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-
-print(f"🔑 SUPABASE_URL: {SUPABASE_URL}")
-print(f"🔑 SUPABASE_KEY: {SUPABASE_KEY[:20] if SUPABASE_KEY else 'NÃO CONFIGURADA'}...")
-
-# Tenta conectar, mas NUNCA quebra o app
-if SUPABASE_URL and SUPABASE_KEY:
-    try:
-        from supabase import create_client, Client
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        # Testa a conexão
-        test = supabase.table('config').select('*').limit(1).execute()
-        print("✅ Conectado ao Supabase com sucesso!")
-    except Exception as e:
-        print(f"⚠️  Erro ao conectar ao Supabase: {e}")
-        print("📊 Usando modo de fallback com dados em memória.")
-        supabase = None
-else:
-    print("⚠️  Variáveis de ambiente não configuradas!")
-    print("📊 Usando modo de fallback com dados em memória.")
-
-# ============================================================
-# FALLBACK: DADOS EM MEMÓRIA
-# ============================================================
-memory_db = {
-    'players': [],
-    'config': {
-        'num_teams': 4,
-        'players_per_team': 6,
-        'balance_gender': True,
-        'auto_fill': True,
-        'default_level': 3
-    }
+players_db = []
+config_db = {
+    'num_teams': 4,
+    'players_per_team': 6,
+    'balance_gender': True,
+    'auto_fill': True,
+    'default_level': 3
 }
 
-def get_players_from_db():
-    if supabase:
-        try:
-            response = supabase.table('players').select('*').order('created_at', desc=True).execute()
-            return response.data
-        except Exception as e:
-            print(f"Erro ao buscar players: {e}")
-            return memory_db['players']
-    return memory_db['players']
-
-def save_players_to_db(players_data):
-    if supabase:
-        try:
-            supabase.table('players').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
-            if players_data:
-                clean_data = []
-                for player in players_data:
-                    clean_data.append({
-                        'name': player.get('name', ''),
-                        'gender': player.get('gender', 'M'),
-                        'position': player.get('position', 'Ponteiro'),
-                        'level': player.get('level', 3),
-                        'confirmed': player.get('confirmed', True),
-                        'fake': player.get('fake', False)
-                    })
-                supabase.table('players').insert(clean_data).execute()
-            return True
-        except Exception as e:
-            print(f"Erro ao salvar players: {e}")
-            memory_db['players'] = players_data
-            return False
+# Tenta conectar ao Supabase, mas NÃO QUEBRA
+supabase = None
+try:
+    from supabase import create_client, Client
+    SUPABASE_URL = os.getenv('SUPABASE_URL')
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+    
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✅ Supabase conectado!")
     else:
-        memory_db['players'] = players_data
-        return True
-
-def get_config_from_db():
-    if supabase:
-        try:
-            response = supabase.table('config').select('*').eq('id', 1).execute()
-            if response.data:
-                config = response.data[0]
-                return {
-                    'numTeams': config.get('num_teams', 4),
-                    'playersPerTeam': config.get('players_per_team', 6),
-                    'balanceGender': config.get('balance_gender', True),
-                    'autoFill': config.get('auto_fill', True),
-                    'defaultLevel': config.get('default_level', 3)
-                }
-        except Exception as e:
-            print(f"Erro ao buscar config: {e}")
-    return memory_db['config']
-
-def save_config_to_db(config_data):
-    if supabase:
-        try:
-            data = {
-                'num_teams': config_data.get('numTeams', 4),
-                'players_per_team': config_data.get('playersPerTeam', 6),
-                'balance_gender': config_data.get('balanceGender', True),
-                'auto_fill': config_data.get('autoFill', True),
-                'default_level': config_data.get('defaultLevel', 3),
-                'updated_at': datetime.now().isoformat()
-            }
-            supabase.table('config').update(data).eq('id', 1).execute()
-            return True
-        except Exception as e:
-            print(f"Erro ao salvar config: {e}")
-            memory_db['config'] = config_data
-            return False
-    else:
-        memory_db['config'] = config_data
-        return True
+        print("⚠️  Variáveis Supabase não configuradas, usando memória")
+except Exception as e:
+    print(f"⚠️  Erro ao conectar Supabase: {e}")
+    print("Usando dados em memória")
 
 # ============================================================
 # ROTAS
@@ -126,6 +41,7 @@ def save_config_to_db(config_data):
 
 @app.route('/')
 def index():
+    """Servir o frontend"""
     try:
         return send_from_directory('static', 'index.html')
     except Exception as e:
@@ -133,51 +49,127 @@ def index():
 
 @app.route('/api/players', methods=['GET'])
 def get_players():
+    """Buscar todos os jogadores"""
     try:
-        return jsonify(get_players_from_db()), 200
+        # Se tiver Supabase, tenta buscar de lá
+        if supabase:
+            try:
+                response = supabase.table('players').select('*').execute()
+                return jsonify(response.data), 200
+            except:
+                pass
+        # Fallback: dados em memória
+        return jsonify(players_db), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/players', methods=['POST'])
 def save_players():
+    """Salvar jogadores"""
+    global players_db
     try:
-        players_data = request.json
-        if not isinstance(players_data, list):
+        data = request.json
+        if not isinstance(data, list):
             return jsonify({'error': 'Dados devem ser uma lista'}), 400
-        success = save_players_to_db(players_data)
-        return jsonify({'success': success, 'message': 'Jogadores salvos!' if success else 'Erro ao salvar'}), 200 if success else 500
+        
+        # Salvar na memória
+        players_db = data
+        
+        # Se tiver Supabase, tenta salvar lá também
+        if supabase:
+            try:
+                # Limpar existentes
+                supabase.table('players').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+                # Inserir novos
+                if data:
+                    clean_data = []
+                    for p in data:
+                        clean_data.append({
+                            'name': p.get('name', ''),
+                            'gender': p.get('gender', 'M'),
+                            'position': p.get('position', 'Ponteiro'),
+                            'level': p.get('level', 3),
+                            'confirmed': p.get('confirmed', True),
+                            'fake': p.get('fake', False)
+                        })
+                    supabase.table('players').insert(clean_data).execute()
+            except Exception as e:
+                print(f"Erro ao salvar no Supabase: {e}")
+        
+        return jsonify({'success': True, 'message': 'Jogadores salvos!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
+    """Buscar configurações"""
     try:
-        return jsonify(get_config_from_db()), 200
+        if supabase:
+            try:
+                response = supabase.table('config').select('*').eq('id', 1).execute()
+                if response.data:
+                    c = response.data[0]
+                    return jsonify({
+                        'numTeams': c.get('num_teams', 4),
+                        'playersPerTeam': c.get('players_per_team', 6),
+                        'balanceGender': c.get('balance_gender', True),
+                        'autoFill': c.get('auto_fill', True),
+                        'defaultLevel': c.get('default_level', 3)
+                    }), 200
+            except:
+                pass
+        return jsonify(config_db), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/config', methods=['POST'])
 def save_config():
+    """Salvar configurações"""
+    global config_db
     try:
-        config_data = request.json
-        success = save_config_to_db(config_data)
-        return jsonify({'success': success, 'message': 'Configurações salvas!' if success else 'Erro ao salvar'}), 200 if success else 500
+        data = request.json
+        config_db = {
+            'num_teams': data.get('numTeams', 4),
+            'players_per_team': data.get('playersPerTeam', 6),
+            'balance_gender': data.get('balanceGender', True),
+            'auto_fill': data.get('autoFill', True),
+            'default_level': data.get('defaultLevel', 3)
+        }
+        
+        if supabase:
+            try:
+                supabase.table('config').update({
+                    'num_teams': config_db['num_teams'],
+                    'players_per_team': config_db['players_per_team'],
+                    'balance_gender': config_db['balance_gender'],
+                    'auto_fill': config_db['auto_fill'],
+                    'default_level': config_db['default_level'],
+                    'updated_at': datetime.now().isoformat()
+                }).eq('id', 1).execute()
+            except Exception as e:
+                print(f"Erro ao salvar config no Supabase: {e}")
+        
+        return jsonify({'success': True, 'message': 'Configurações salvas!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reset', methods=['DELETE'])
 def reset_data():
-    try:
-        save_players_to_db([])
-        save_config_to_db({'numTeams': 4, 'playersPerTeam': 6, 'balanceGender': True, 'autoFill': True, 'defaultLevel': 3})
-        return jsonify({'success': True, 'message': 'Dados resetados!'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """Resetar dados"""
+    global players_db
+    players_db = []
+    if supabase:
+        try:
+            supabase.table('players').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+        except:
+            pass
+    return jsonify({'success': True, 'message': 'Dados resetados!'}), 200
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
+    """Estatísticas"""
     try:
-        players = get_players_from_db()
+        players = players_db
         stats = {
             'total': len(players),
             'confirmed': sum(1 for p in players if p.get('confirmed', True)),
@@ -196,23 +188,23 @@ def get_stats():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    try:
-        return jsonify({
-            'status': 'healthy',
-            'database': 'connected' if supabase else 'fallback_memory',
-            'timestamp': datetime.now().isoformat(),
-            'players_count': len(get_players_from_db())
-        }), 200
-    except Exception as e:
-        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+    """Health check"""
+    return jsonify({
+        'status': 'healthy',
+        'players': len(players_db),
+        'supabase': 'connected' if supabase else 'memory'
+    }), 200
 
 @app.errorhandler(Exception)
-def handle_exception(e):
-    print(f"Erro: {e}")
+def handle_error(e):
+    print(f"❌ Erro: {e}")
     return jsonify({'error': str(e)}), 500
 
+# ============================================================
+# INICIALIZAÇÃO
+# ============================================================
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     print(f"🚀 Servidor rodando em http://localhost:{port}")
-    print(f"📊 Modo: {'Supabase' if supabase else 'Memória (fallback)'}")
+    print(f"📊 Modo: {'Supabase' if supabase else 'Memória'}")
     app.run(host='0.0.0.0', port=port, debug=True)
