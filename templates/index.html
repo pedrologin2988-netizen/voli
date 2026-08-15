@@ -700,7 +700,7 @@
         }
         
         // ============================================================
-        // PROCESSAR LISTA DE PRESENÇA - APENAS CONFIRMADOS (✅ ou 👍)
+        // PROCESSAR LISTA DE PRESENÇA - VERSÃO CORRIGIDA
         // ============================================================
         function processPresence() {
             const text = document.getElementById('presenceList').value;
@@ -714,77 +714,40 @@
             const newPlayers = [];
             const updatedPlayers = [];
             
-            // Regex para capturar jogadores
-            const playerRegex = /^(\d+)[\s\-\.\)]*\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)(\s*[✅👍❌]?)$/i;
-            
+            // Para cada linha do texto
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
                 
-                // Pular linhas que não começam com número
-                if (!/^\d/.test(trimmed)) continue;
+                // Verifica se a linha começa com um número (1-, 2-, etc)
+                const numberMatch = trimmed.match(/^(\d+)/);
+                if (!numberMatch) continue;
                 
-                // Verificar se tem emoji de confirmação na linha
-                if (!/[✅👍]/.test(trimmed)) continue;
+                // Verifica se tem emoji de confirmação (✅ ou 👍)
+                const hasConfirm = /[✅👍]/.test(trimmed);
+                if (!hasConfirm) continue;
                 
-                const match = trimmed.match(playerRegex);
-                if (!match) {
-                    // Tentar capturar sem o número no início
-                    const simpleMatch = trimmed.match(/^(\d+)\s*[-.)]?\s*(.+)/);
-                    if (simpleMatch) {
-                        let name = simpleMatch[2].trim();
-                        let emoji = '';
-                        
-                        const emojiMatch = name.match(/([✅👍❌])$/);
-                        if (emojiMatch) {
-                            emoji = emojiMatch[1];
-                            name = name.replace(/[✅👍❌]$/, '').trim();
-                        }
-                        
-                        // SÓ PROCESSA SE FOR CONFIRMADO (✅ ou 👍)
-                        const isConfirmed = emoji ? /[✅👍]/.test(emoji) : false;
-                        
-                        if (isConfirmed && name && name.length >= 2) {
-                            const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-                            
-                            if (existing) {
-                                existing.confirmed = true;
-                                updatedPlayers.push(existing.name);
-                            } else {
-                                const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
-                                const position = autoAssignPosition(name);
-                                newPlayers.push({
-                                    name: name,
-                                    gender: 'M',
-                                    position: position,
-                                    level: defaultLevel,
-                                    confirmed: true
-                                });
-                            }
-                            found++;
-                        }
-                    }
-                    continue;
-                }
+                // Extrai o nome: remove o número, remove emojis, remove caracteres especiais
+                let name = trimmed;
                 
-                let name = match[2].trim();
-                let emoji = match[3] ? match[3].trim() : '';
+                // Remove o número inicial (ex: "1-", "2-", "12-", "12.")
+                name = name.replace(/^\d+[\s\-\.\)]*\s*/, '');
                 
-                name = name.replace(/[✅👍❌]/g, '').trim();
+                // Remove emojis
+                name = name.replace(/[✅👍❌]/g, '');
                 
-                // Verificar se tem emoji de confirmação
-                const isConfirmed = /[✅👍]/.test(emoji);
-                const isNotConfirmed = /[❌]/.test(emoji);
-                const confirmed = isConfirmed && !isNotConfirmed;
+                // Remove caracteres especiais, mantém letras, espaços, pontos e hífens
+                name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '');
                 
-                // SÓ PROCESSA SE FOR CONFIRMADO (✅ ou 👍)
-                if (!confirmed) continue;
+                // Remove espaços extras
+                name = name.trim();
                 
-                name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/g, '').trim();
-                
+                // Pula se nome for muito curto
                 if (!name || name.length < 2) continue;
                 
+                // Verifica se já existe
                 const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                
                 if (existing) {
                     existing.confirmed = true;
                     updatedPlayers.push(existing.name);
@@ -802,56 +765,51 @@
                 found++;
             }
             
-            // Método alternativo APENAS CONFIRMADOS
+            // Se não encontrou nada, tenta método alternativo mais simples
             if (found === 0) {
-                const altRegex = /(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+)/i;
+                // Tenta capturar qualquer linha que tenha ✅ ou 👍
                 for (const line of lines) {
                     const trimmed = line.trim();
                     if (!trimmed) continue;
-                    
-                    // Verificar se tem emoji de confirmação
                     if (!/[✅👍]/.test(trimmed)) continue;
                     
-                    const match = trimmed.match(altRegex);
-                    if (match) {
-                        let name = match[2].trim();
-                        let emoji = '';
-                        
-                        const emojiMatch = name.match(/([✅👍❌])$/);
-                        if (emojiMatch) {
-                            emoji = emojiMatch[1];
-                            name = name.replace(/[✅👍❌]$/, '').trim();
-                        }
-                        
-                        const isConfirmed = emoji ? /[✅👍]/.test(emoji) : false;
-                        
-                        if (isConfirmed) {
-                            name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/g, '').trim();
-                            
-                            if (name && name.length >= 2) {
-                                const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-                                if (!existing) {
-                                    const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
-                                    const position = autoAssignPosition(name);
-                                    newPlayers.push({
-                                        name: name,
-                                        gender: 'M',
-                                        position: position,
-                                        level: defaultLevel,
-                                        confirmed: true
-                                    });
-                                    found++;
-                                }
-                            }
+                    // Tenta extrair o nome
+                    let name = trimmed;
+                    
+                    // Remove números no início
+                    name = name.replace(/^\d+[\s\-\.\)]*\s*/, '');
+                    
+                    // Remove emojis
+                    name = name.replace(/[✅👍❌]/g, '');
+                    
+                    // Limpa caracteres especiais
+                    name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '');
+                    name = name.trim();
+                    
+                    if (name && name.length >= 2) {
+                        const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                        if (!existing) {
+                            const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                            const position = autoAssignPosition(name);
+                            newPlayers.push({
+                                name: name,
+                                gender: 'M',
+                                position: position,
+                                level: defaultLevel,
+                                confirmed: true
+                            });
+                            found++;
                         }
                     }
                 }
             }
             
+            // Adiciona os novos jogadores
             if (newPlayers.length > 0) {
                 players = [...players, ...newPlayers];
             }
             
+            // Salva e atualiza
             savePlayersToServer();
             updateUI();
             
