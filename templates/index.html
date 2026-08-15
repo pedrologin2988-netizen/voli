@@ -74,9 +74,6 @@
             border-radius: 10px;
             -webkit-text-fill-color: white;
         }
-        .section h2 .badge.green { background: #48bb78; }
-        .section h2 .badge.red { background: #fc8181; }
-        .section h2 .badge.orange { background: #ed8936; }
         textarea {
             width: 100%;
             height: 200px;
@@ -568,7 +565,7 @@
         }
         
         // ============================================================
-        // PROCESSAR LISTA - COM MENSALISTAS, DIARISTAS E ESPERA
+        // PROCESSAR LISTA - VERSÃO SIMPLIFICADA
         // ============================================================
         function processPresence() {
             console.log('🔄 Processando lista...');
@@ -579,7 +576,11 @@
                 return;
             }
             
+            console.log('📝 Texto recebido:', text.substring(0, 300) + '...');
+            
             const lines = text.split('\n');
+            console.log(`📄 Total de linhas: ${lines.length}`);
+            
             let found = 0;
             const newPlayers = [];
             const updatedPlayers = [];
@@ -593,139 +594,130 @@
                 const trimmed = line.trim();
                 if (!trimmed) continue;
                 
-                // Detectar se entrou na seção "Diarista"
+                // Detectar seções
                 if (trimmed.toLowerCase().includes('diarista')) {
                     isDiaristaSection = true;
                     isEsperaSection = false;
                     continue;
                 }
-                
-                // Detectar se entrou na seção "Espera"
                 if (trimmed.toLowerCase().includes('espera')) {
                     isEsperaSection = true;
                     isDiaristaSection = false;
                     continue;
                 }
                 
-                // Se for linha de diarista (começa com número)
-                if (isDiaristaSection) {
-                    const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍]?)/);
-                    if (match) {
-                        let name = match[2].trim();
-                        name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
-                        if (name && name.length >= 2) {
-                            diaristaList.push(name);
-                            console.log(`🟡 Diarista: ${name}`);
-                        }
-                    }
+                // Pular linhas que não começam com número
+                if (!/^\d/.test(trimmed)) continue;
+                
+                // Extrair nome e emoji de forma SIMPLES
+                // Remove o número inicial (ex: "1-", "2-", "12-", "12.")
+                let rest = trimmed.replace(/^\d+[\s\-\.\)]*\s*/, '');
+                
+                // Verifica se tem emoji no final
+                let emoji = '';
+                const emojiMatch = rest.match(/([✅👍❌])$/);
+                if (emojiMatch) {
+                    emoji = emojiMatch[1];
+                    rest = rest.replace(/[✅👍❌]$/, '');
+                }
+                
+                // Limpa o nome
+                let name = rest.trim();
+                name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
+                
+                if (!name || name.length < 2) {
+                    console.log(`⏭️ Nome inválido: "${name}"`);
                     continue;
                 }
                 
-                // Se for linha de espera (começa com número)
-                if (isEsperaSection) {
-                    const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍]?)/);
-                    if (match) {
-                        let name = match[2].trim();
-                        name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
-                        if (name && name.length >= 2) {
-                            esperaList.push(name);
-                            console.log(`⏳ Espera: ${name}`);
-                        }
-                    }
-                    continue;
-                }
+                console.log(`📝 Linha: "${trimmed}" → Nome: "${name}", Emoji: "${emoji}"`);
                 
-                // Processar mensalistas (fora das seções Diarista e Espera)
-                const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍❌]?)/);
-                
-                if (match) {
-                    let name = match[2].trim();
-                    const emoji = match[3] || '';
-                    
+                // Verifica se é mensalista (fora das seções Diarista/Espera)
+                if (!isDiaristaSection && !isEsperaSection) {
                     const isConfirmed = /[✅👍]/.test(emoji);
                     const isNotConfirmed = /[❌]/.test(emoji);
                     const confirmed = isConfirmed && !isNotConfirmed;
                     
-                    name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
+                    const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
                     
-                    if (name && name.length >= 2) {
-                        console.log(`📝 Mensalista ${confirmed ? '✅' : '❌'} ${name}`);
-                        
-                        const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-                        
-                        if (existing) {
-                            existing.confirmed = confirmed;
-                            existing.tipo = 'mensalista';
-                            existing.isDiarista = false;
-                            existing.isEspera = false;
-                            updatedPlayers.push(existing.name);
-                        } else {
-                            const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
-                            const position = autoAssignPosition(name);
-                            newPlayers.push({
-                                name: name,
-                                gender: Math.random() > 0.5 ? 'M' : 'F',
-                                position: position,
-                                level: defaultLevel,
-                                confirmed: confirmed,
-                                tipo: 'mensalista',
-                                isDiarista: false,
-                                isEspera: false,
-                                isSubstituto: false
-                            });
-                        }
+                    if (existing) {
+                        existing.confirmed = confirmed;
+                        existing.tipo = 'mensalista';
+                        existing.isDiarista = false;
+                        existing.isEspera = false;
+                        updatedPlayers.push(existing.name);
+                        console.log(`♻️ Mensalista atualizado: ${name} - ${confirmed ? '✅' : '❌'}`);
+                    } else {
+                        const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                        const position = autoAssignPosition(name);
+                        newPlayers.push({
+                            name: name,
+                            gender: Math.random() > 0.5 ? 'M' : 'F',
+                            position: position,
+                            level: defaultLevel,
+                            confirmed: confirmed,
+                            tipo: 'mensalista',
+                            isDiarista: false,
+                            isEspera: false,
+                            isSubstituto: false
+                        });
+                        console.log(`🆕 Novo mensalista: ${name} - ${confirmed ? '✅' : '❌'}`);
+                    }
+                    found++;
+                }
+                
+                // Se for seção Diarista
+                if (isDiaristaSection) {
+                    const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                    if (!existing) {
+                        const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                        const position = autoAssignPosition(name);
+                        newPlayers.push({
+                            name: name,
+                            gender: Math.random() > 0.5 ? 'M' : 'F',
+                            position: position,
+                            level: defaultLevel,
+                            confirmed: true,
+                            tipo: 'diarista',
+                            isDiarista: true,
+                            isEspera: false,
+                            isSubstituto: false
+                        });
+                        console.log(`🟡 Novo diarista: ${name}`);
                         found++;
+                    } else {
+                        existing.isDiarista = true;
+                        existing.tipo = 'diarista';
+                        existing.confirmed = true;
+                        console.log(`🟡 Diarista atualizado: ${name}`);
                     }
                 }
-            }
-            
-            // Adicionar diaristas (sempre confirmados)
-            for (const name of diaristaList) {
-                const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-                if (!existing) {
-                    const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
-                    const position = autoAssignPosition(name);
-                    newPlayers.push({
-                        name: name,
-                        gender: Math.random() > 0.5 ? 'M' : 'F',
-                        position: position,
-                        level: defaultLevel,
-                        confirmed: true,
-                        tipo: 'diarista',
-                        isDiarista: true,
-                        isEspera: false,
-                        isSubstituto: false
-                    });
-                    console.log(`🟡 Adicionado diarista: ${name}`);
-                } else {
-                    existing.isDiarista = true;
-                    existing.tipo = 'diarista';
-                    existing.confirmed = true;
-                }
-            }
-            
-            // Adicionar espera (sempre confirmados)
-            for (const name of esperaList) {
-                const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-                if (!existing) {
-                    const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
-                    const position = autoAssignPosition(name);
-                    newPlayers.push({
-                        name: name,
-                        gender: Math.random() > 0.5 ? 'M' : 'F',
-                        position: position,
-                        level: defaultLevel,
-                        confirmed: true,
-                        tipo: 'espera',
-                        isDiarista: false,
-                        isEspera: true,
-                        isSubstituto: false
-                    });
-                    console.log(`⏳ Adicionado da espera: ${name}`);
-                } else {
-                    existing.isEspera = true;
-                    existing.tipo = 'espera';
-                    existing.confirmed = true;
+                
+                // Se for seção Espera
+                if (isEsperaSection) {
+                    const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                    if (!existing) {
+                        const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                        const position = autoAssignPosition(name);
+                        newPlayers.push({
+                            name: name,
+                            gender: Math.random() > 0.5 ? 'M' : 'F',
+                            position: position,
+                            level: defaultLevel,
+                            confirmed: true,
+                            tipo: 'espera',
+                            isDiarista: false,
+                            isEspera: true,
+                            isSubstituto: false
+                        });
+                        console.log(`⏳ Novo da espera: ${name}`);
+                        found++;
+                    } else {
+                        existing.isEspera = true;
+                        existing.tipo = 'espera';
+                        existing.confirmed = true;
+                        console.log(`⏳ Espera atualizado: ${name}`);
+                    }
                 }
             }
             
@@ -740,7 +732,7 @@
             const diaristas = players.filter(p => p.isDiarista).length;
             const espera = players.filter(p => p.isEspera).length;
             
-            let msg = `✅ Processado! ${found} mensalistas encontrados.`;
+            let msg = `✅ Processado! ${found} jogadores encontrados.`;
             msg += `\n✅ Mensalistas confirmados: ${mensalistas}`;
             msg += `\n🟡 Diaristas: ${diaristas}`;
             msg += `\n⏳ Espera: ${espera}`;
@@ -786,7 +778,7 @@
         }
         
         // ============================================================
-        // GERAR TIMES - COM MENSALISTAS, DIARISTAS E ESPERA
+        // GERAR TIMES
         // ============================================================
         function generateTeams() {
             const numTeams = parseInt(document.getElementById('numTeams').value) || 4;
