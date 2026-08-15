@@ -79,7 +79,7 @@
         .section h2 .badge.orange { background: #ed8936; }
         textarea {
             width: 100%;
-            height: 150px;
+            height: 200px;
             background: rgba(0, 0, 0, 0.3);
             color: #e2e8f0;
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -190,8 +190,10 @@
         .player-item .remove-btn:active { transform: scale(0.9); }
         .player-item .confirmed { color: #48bb78; font-size: 12px; }
         .player-item .not-confirmed { color: #fc8181; font-size: 12px; }
-        .player-item .espera { color: #f6ad55; font-size: 12px; }
-        .player-item .substituto { color: #f6ad55; font-size: 12px; }
+        .player-item .mensalista { color: #48bb78; font-size: 10px; }
+        .player-item .diarista { color: #f6ad55; font-size: 10px; }
+        .player-item .espera { color: #f6ad55; font-size: 10px; }
+        .player-item .substituto { color: #fc8181; font-size: 10px; }
         .stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -368,6 +370,8 @@
         }
         .rules-box strong { color: #f6ad55; }
         .rules-box .highlight { color: #48bb78; }
+        .rules-box .diarista-color { color: #f6ad55; }
+        .rules-box .espera-color { color: #f6ad55; }
         @media (max-width: 380px) {
             .player-item .info { gap: 3px; }
             .player-item .name { font-size: 12px; min-width: 40px; }
@@ -392,7 +396,7 @@
         <div class="grid-2">
             <div class="section">
                 <h2>📋 Lista de Presença</h2>
-                <div class="filter-info">✅ Confirmados (✅ ou 👍) | ❌ Ausentes | ⏳ Espera</div>
+                <div class="filter-info">✅ Mensalistas (✅/👍) | ❌ Ausentes | 🟡 Diaristas | ⏳ Espera</div>
                 <textarea id="presenceList" placeholder="Cole aqui a lista de presença..."></textarea>
                 <div class="btn-group">
                     <button class="btn btn-primary" onclick="processPresence()">🔄 Processar</button>
@@ -442,11 +446,11 @@
                 
                 <div class="rules-box">
                     <strong>📌 Regras:</strong><br>
-                    • <span class="highlight">✅ Confirmados</span> vão para os times<br>
-                    • <span style="color: #fc8181;">❌ Ausentes</span> são substituídos pela <span style="color: #f6ad55;">⏳ Espera</span><br>
-                    • Se ainda faltar, coloca <span style="color: #f6ad55;">"Jogador Substituto"</span><br>
-                    • 1 Levantador por time (máximo)<br>
-                    • Nível individual <strong>NÃO</strong> é exibido no copiar
+                    • <span class="highlight">✅ Mensalistas confirmados</span> vão para os times<br>
+                    • <span style="color: #fc8181;">❌ Ausentes</span> são substituídos por <span class="diarista-color">🟡 Diaristas</span><br>
+                    • Se ainda faltar, usa <span class="espera-color">⏳ Espera</span><br>
+                    • Se ainda faltar, coloca <span style="color: #fc8181;">"Jogador Substituto"</span><br>
+                    • 1 Levantador por time (máximo)
                 </div>
             </div>
         </div>
@@ -509,8 +513,10 @@
                     position: p.position || 'Passador',
                     level: p.level || 3,
                     confirmed: p.confirmed !== undefined ? p.confirmed : true,
+                    isDiarista: p.is_diarista || false,
                     isEspera: p.is_espera || false,
-                    isSubstituto: p.is_substituto || false
+                    isSubstituto: p.is_substituto || false,
+                    tipo: p.tipo || 'mensalista'
                 }));
                 updateUI();
                 return true;
@@ -562,7 +568,7 @@
         }
         
         // ============================================================
-        // PROCESSAR LISTA - COM ESPERA
+        // PROCESSAR LISTA - COM MENSALISTAS, DIARISTAS E ESPERA
         // ============================================================
         function processPresence() {
             console.log('🔄 Processando lista...');
@@ -577,17 +583,41 @@
             let found = 0;
             const newPlayers = [];
             const updatedPlayers = [];
+            const diaristaList = [];
             const esperaList = [];
             
+            let isDiaristaSection = false;
             let isEsperaSection = false;
             
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
                 
+                // Detectar se entrou na seção "Diarista"
+                if (trimmed.toLowerCase().includes('diarista')) {
+                    isDiaristaSection = true;
+                    isEsperaSection = false;
+                    continue;
+                }
+                
                 // Detectar se entrou na seção "Espera"
                 if (trimmed.toLowerCase().includes('espera')) {
                     isEsperaSection = true;
+                    isDiaristaSection = false;
+                    continue;
+                }
+                
+                // Se for linha de diarista (começa com número)
+                if (isDiaristaSection) {
+                    const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍]?)/);
+                    if (match) {
+                        let name = match[2].trim();
+                        name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
+                        if (name && name.length >= 2) {
+                            diaristaList.push(name);
+                            console.log(`🟡 Diarista: ${name}`);
+                        }
+                    }
                     continue;
                 }
                 
@@ -605,7 +635,7 @@
                     continue;
                 }
                 
-                // Processar jogadores normais (fora da seção Espera)
+                // Processar mensalistas (fora das seções Diarista e Espera)
                 const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍❌]?)/);
                 
                 if (match) {
@@ -619,12 +649,14 @@
                     name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
                     
                     if (name && name.length >= 2) {
-                        console.log(`📝 ${confirmed ? '✅' : '❌'} ${name}`);
+                        console.log(`📝 Mensalista ${confirmed ? '✅' : '❌'} ${name}`);
                         
                         const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
                         
                         if (existing) {
                             existing.confirmed = confirmed;
+                            existing.tipo = 'mensalista';
+                            existing.isDiarista = false;
                             existing.isEspera = false;
                             updatedPlayers.push(existing.name);
                         } else {
@@ -636,6 +668,8 @@
                                 position: position,
                                 level: defaultLevel,
                                 confirmed: confirmed,
+                                tipo: 'mensalista',
+                                isDiarista: false,
                                 isEspera: false,
                                 isSubstituto: false
                             });
@@ -645,7 +679,32 @@
                 }
             }
             
-            // Adicionar jogadores da espera
+            // Adicionar diaristas (sempre confirmados)
+            for (const name of diaristaList) {
+                const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                if (!existing) {
+                    const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                    const position = autoAssignPosition(name);
+                    newPlayers.push({
+                        name: name,
+                        gender: Math.random() > 0.5 ? 'M' : 'F',
+                        position: position,
+                        level: defaultLevel,
+                        confirmed: true,
+                        tipo: 'diarista',
+                        isDiarista: true,
+                        isEspera: false,
+                        isSubstituto: false
+                    });
+                    console.log(`🟡 Adicionado diarista: ${name}`);
+                } else {
+                    existing.isDiarista = true;
+                    existing.tipo = 'diarista';
+                    existing.confirmed = true;
+                }
+            }
+            
+            // Adicionar espera (sempre confirmados)
             for (const name of esperaList) {
                 const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
                 if (!existing) {
@@ -657,12 +716,15 @@
                         position: position,
                         level: defaultLevel,
                         confirmed: true,
+                        tipo: 'espera',
+                        isDiarista: false,
                         isEspera: true,
                         isSubstituto: false
                     });
                     console.log(`⏳ Adicionado da espera: ${name}`);
                 } else {
                     existing.isEspera = true;
+                    existing.tipo = 'espera';
                     existing.confirmed = true;
                 }
             }
@@ -674,12 +736,14 @@
             savePlayersToServer();
             updateUI();
             
-            const confirmedCount = players.filter(p => p.confirmed).length;
-            const esperaCount = players.filter(p => p.isEspera).length;
+            const mensalistas = players.filter(p => p.tipo === 'mensalista' && p.confirmed).length;
+            const diaristas = players.filter(p => p.isDiarista).length;
+            const espera = players.filter(p => p.isEspera).length;
             
-            let msg = `✅ Processado! ${found} jogadores encontrados.`;
-            msg += `\n✅ Confirmados: ${confirmedCount}`;
-            msg += `\n⏳ Espera: ${esperaCount}`;
+            let msg = `✅ Processado! ${found} mensalistas encontrados.`;
+            msg += `\n✅ Mensalistas confirmados: ${mensalistas}`;
+            msg += `\n🟡 Diaristas: ${diaristas}`;
+            msg += `\n⏳ Espera: ${espera}`;
             if (newPlayers.length > 0) msg += `\n🆕 Novos: ${newPlayers.length}`;
             
             console.log(msg);
@@ -722,7 +786,7 @@
         }
         
         // ============================================================
-        // GERAR TIMES - COM ESPERA E SUBSTITUTOS
+        // GERAR TIMES - COM MENSALISTAS, DIARISTAS E ESPERA
         // ============================================================
         function generateTeams() {
             const numTeams = parseInt(document.getElementById('numTeams').value) || 4;
@@ -730,13 +794,22 @@
             const balanceGender = document.getElementById('balanceGender').checked;
             const totalNeeded = numTeams * playersPerTeam;
             
-            // Pegar apenas CONFIRMADOS (✅ ou 👍)
-            let available = players.filter(p => p.confirmed === true);
+            // 1. Pegar mensalistas CONFIRMADOS (✅ ou 👍)
+            let available = players.filter(p => p.tipo === 'mensalista' && p.confirmed === true);
+            console.log(`✅ Mensalistas confirmados: ${available.length}`);
             
-            console.log(`👥 Confirmados: ${available.length}`);
-            console.log(`⏳ Espera: ${players.filter(p => p.isEspera).length}`);
+            // 2. Se faltar, usar diaristas
+            if (available.length < totalNeeded) {
+                const diaristas = players.filter(p => p.isDiarista === true);
+                const needed = totalNeeded - available.length;
+                const toAdd = Math.min(needed, diaristas.length);
+                for (let i = 0; i < toAdd; i++) {
+                    available.push(diaristas[i]);
+                }
+                console.log(`🟡 Adicionados ${toAdd} diaristas`);
+            }
             
-            // Se não houver confirmados suficientes, usar os da espera
+            // 3. Se ainda faltar, usar espera
             if (available.length < totalNeeded) {
                 const espera = players.filter(p => p.isEspera === true);
                 const needed = totalNeeded - available.length;
@@ -747,14 +820,13 @@
                 console.log(`⏳ Adicionados ${toAdd} da espera`);
             }
             
-            // Se ainda faltar, adicionar "Jogador Substituto"
+            // 4. Se ainda faltar, adicionar "Jogador Substituto"
             let substitutosCount = 0;
             while (available.length < totalNeeded) {
                 const gender = balanceGender ? 
                     (available.filter(p => p.gender === 'F').length < Math.floor(totalNeeded / 2) ? 'F' : 'M') :
                     (Math.random() > 0.5 ? 'M' : 'F');
                 
-                // Verificar se já tem levantador suficiente
                 const settersCount = available.filter(p => p.position === 'Levantador').length;
                 const neededSetters = Math.ceil(available.length / playersPerTeam);
                 let pos = 'Passador';
@@ -769,6 +841,8 @@
                     position: pos,
                     level: 3,
                     confirmed: true,
+                    tipo: 'substituto',
+                    isDiarista: false,
                     isEspera: false,
                     isSubstituto: true,
                     fake: true
@@ -785,7 +859,6 @@
             let setters = available.filter(p => p.position === 'Levantador');
             let passadores = available.filter(p => p.position === 'Passador');
             
-            // Se não houver levantadores suficientes, converter alguns passadores
             if (setters.length < numTeams) {
                 const needed = numTeams - setters.length;
                 for (let i = 0; i < Math.min(needed, passadores.length); i++) {
@@ -795,11 +868,9 @@
                 passadores = available.filter(p => p.position === 'Passador');
             }
             
-            // Embaralhar cada grupo
             setters = shuffle(setters);
             passadores = shuffle(passadores);
             
-            // Inicializar times
             teams = [];
             for (let i = 0; i < numTeams; i++) {
                 teams.push({ 
@@ -821,7 +892,6 @@
                 else teams[i].maleCount++;
             }
             
-            // Distribuir passadores (equilibrando nível e gênero)
             passadores.sort((a, b) => b.level - a.level);
             
             for (const player of passadores) {
@@ -869,7 +939,7 @@
                 else teams[targetTeam].maleCount++;
             }
             
-            // Preencher times com jogadores fictícios se necessário
+            // Preencher times com substitutos se necessário
             for (let i = 0; i < teams.length; i++) {
                 while (teams[i].players.length < playersPerTeam) {
                     const gender = balanceGender ? 
@@ -883,14 +953,16 @@
                     }
                     
                     const level = Math.floor(Math.random() * 3) + 2;
+                    const subCount = teams[i].players.filter(p => p.isSubstituto).length + 1;
                     teams[i].players.push({
-                        name: `Jogador Substituto ${teams[i].players.length + 1}`,
+                        name: `Jogador Substituto ${subCount}`,
                         gender: gender,
                         position: pos,
                         level: level,
                         confirmed: true,
-                        fake: true,
-                        isSubstituto: true
+                        tipo: 'substituto',
+                        isSubstituto: true,
+                        fake: true
                     });
                     teams[i].totalLevel += level;
                     if (gender === 'F') teams[i].femaleCount++;
@@ -921,9 +993,16 @@
                 card.className = 'team-card';
                 const avg = (team.totalLevel / team.players.length).toFixed(1);
                 
-                // Contar posições no time
                 const setters = team.players.filter(p => p.position === 'Levantador').length;
                 const passadores = team.players.filter(p => p.position === 'Passador').length;
+                
+                // Ícones para tipos de jogadores
+                const getIcon = (p) => {
+                    if (p.isSubstituto) return '🔄';
+                    if (p.isDiarista) return '🟡';
+                    if (p.isEspera) return '⏳';
+                    return '';
+                };
                 
                 card.innerHTML = `
                     <h3>
@@ -932,7 +1011,7 @@
                     </h3>
                     ${team.players.map(p => `
                         <div class="player">
-                            <span>${p.name} ${p.gender === 'F' ? '♀' : '♂'}${p.isSubstituto ? ' 🔄' : ''}</span>
+                            <span>${p.name} ${p.gender === 'F' ? '♀' : '♂'} ${getIcon(p)}</span>
                             <span>${p.position}</span>
                         </div>
                     `).join('')}
@@ -944,11 +1023,11 @@
                 `;
                 grid.appendChild(card);
                 
-                // TEXTO PARA COPIAR - SEM NÍVEL INDIVIDUAL
                 output += `TIME ${i + 1} (⭐ ${avg})\n`;
                 output += `${'-'.repeat(30)}\n`;
                 team.players.forEach(p => {
-                    output += `${p.name} (${p.gender === 'F' ? '♀' : '♂'}) - ${p.position}${p.isSubstituto ? ' 🔄' : ''}\n`;
+                    const icon = p.isSubstituto ? ' 🔄' : p.isDiarista ? ' 🟡' : p.isEspera ? ' ⏳' : '';
+                    output += `${p.name} (${p.gender === 'F' ? '♀' : '♂'})${icon} - ${p.position}\n`;
                 });
                 output += `👥 ${team.players.length} | 🏐${setters} Lev | 🏐${passadores} Pas | ♀${team.femaleCount} ♂${team.maleCount}\n\n`;
             });
@@ -1000,7 +1079,6 @@
             document.getElementById('playerCount').textContent = players.length;
             document.getElementById('totalPlayersDisplay').textContent = confirmed.length;
             
-            // Distribuição de posições (apenas 2)
             const posCount = { Levantador: 0, Passador: 0 };
             players.forEach(p => {
                 if (posCount[p.position] !== undefined) posCount[p.position]++;
@@ -1016,21 +1094,23 @@
             players.forEach((p, i) => {
                 const div = document.createElement('div');
                 div.className = 'player-item';
-                const isConfirmed = p.confirmed !== false;
                 
                 let statusLabel = '';
                 let statusClass = '';
                 if (p.isSubstituto) {
                     statusLabel = '🔄 Substituto';
                     statusClass = 'substituto';
+                } else if (p.isDiarista) {
+                    statusLabel = '🟡 Diarista';
+                    statusClass = 'diarista';
                 } else if (p.isEspera) {
                     statusLabel = '⏳ Espera';
                     statusClass = 'espera';
-                } else if (isConfirmed) {
-                    statusLabel = '✅';
-                    statusClass = 'confirmed';
+                } else if (p.confirmed) {
+                    statusLabel = '✅ Mensalista';
+                    statusClass = 'mensalista';
                 } else {
-                    statusLabel = '❌';
+                    statusLabel = '❌ Ausente';
                     statusClass = 'not-confirmed';
                 }
                 
@@ -1061,6 +1141,7 @@
                             <option value="F" ${p.gender === 'F' ? 'selected' : ''}>♀</option>
                         </select>
                         ${p.isSubstituto ? '🔄' : ''}
+                        ${p.isDiarista ? '🟡' : ''}
                         ${p.isEspera ? '⏳' : ''}
                     </div>
                     <button class="remove-btn" onclick="removePlayer(${i})">×</button>
