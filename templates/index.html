@@ -74,6 +74,9 @@
             border-radius: 10px;
             -webkit-text-fill-color: white;
         }
+        .section h2 .badge.green { background: #48bb78; }
+        .section h2 .badge.red { background: #fc8181; }
+        .section h2 .badge.orange { background: #ed8936; }
         textarea {
             width: 100%;
             height: 150px;
@@ -187,6 +190,8 @@
         .player-item .remove-btn:active { transform: scale(0.9); }
         .player-item .confirmed { color: #48bb78; font-size: 12px; }
         .player-item .not-confirmed { color: #fc8181; font-size: 12px; }
+        .player-item .espera { color: #f6ad55; font-size: 12px; }
+        .player-item .substituto { color: #f6ad55; font-size: 12px; }
         .stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -362,6 +367,7 @@
             margin-top: 8px;
         }
         .rules-box strong { color: #f6ad55; }
+        .rules-box .highlight { color: #48bb78; }
         @media (max-width: 380px) {
             .player-item .info { gap: 3px; }
             .player-item .name { font-size: 12px; min-width: 40px; }
@@ -386,7 +392,7 @@
         <div class="grid-2">
             <div class="section">
                 <h2>📋 Lista de Presença</h2>
-                <div class="filter-info">✅ Apenas jogadores com ✅ ou 👍 serão processados</div>
+                <div class="filter-info">✅ Confirmados (✅ ou 👍) | ❌ Ausentes | ⏳ Espera</div>
                 <textarea id="presenceList" placeholder="Cole aqui a lista de presença..."></textarea>
                 <div class="btn-group">
                     <button class="btn btn-primary" onclick="processPresence()">🔄 Processar</button>
@@ -404,7 +410,6 @@
                 </div>
                 <div class="config-row">
                     <label><input type="checkbox" id="balanceGender" checked /> Equilibrar Gênero</label>
-                    <label><input type="checkbox" id="autoFill" checked /> Preencher faltantes</label>
                 </div>
                 <div class="config-row">
                     <label>Nível padrão: 
@@ -433,14 +438,15 @@
                 
                 <div class="fab-group">
                     <button class="btn btn-success" onclick="generateTeams()">🎯 Gerar Times</button>
-                    <button class="btn btn-pink btn-sm" onclick="addFakePlayers()">➕ Faltantes</button>
                 </div>
                 
                 <div class="rules-box">
                     <strong>📌 Regras:</strong><br>
+                    • <span class="highlight">✅ Confirmados</span> vão para os times<br>
+                    • <span style="color: #fc8181;">❌ Ausentes</span> são substituídos pela <span style="color: #f6ad55;">⏳ Espera</span><br>
+                    • Se ainda faltar, coloca <span style="color: #f6ad55;">"Jogador Substituto"</span><br>
                     • 1 Levantador por time (máximo)<br>
-                    • Restante são Passadores<br>
-                    • Times equilibrados por nível (⭐)
+                    • Nível individual <strong>NÃO</strong> é exibido no copiar
                 </div>
             </div>
         </div>
@@ -465,9 +471,6 @@
         let teams = [];
         let toastTimeout = null;
 
-        // Posições disponíveis (apenas 2)
-        const POSITIONS = ['Levantador', 'Passador'];
-        
         // ============================================================
         // API
         // ============================================================
@@ -505,7 +508,9 @@
                     gender: p.gender || 'M',
                     position: p.position || 'Passador',
                     level: p.level || 3,
-                    confirmed: p.confirmed !== undefined ? p.confirmed : true
+                    confirmed: p.confirmed !== undefined ? p.confirmed : true,
+                    isEspera: p.is_espera || false,
+                    isSubstituto: p.is_substituto || false
                 }));
                 updateUI();
                 return true;
@@ -533,7 +538,6 @@
                 document.getElementById('numTeams').value = config.numTeams || 4;
                 document.getElementById('playersPerTeam').value = config.playersPerTeam || 6;
                 document.getElementById('balanceGender').checked = config.balanceGender !== false;
-                document.getElementById('autoFill').checked = config.autoFill !== false;
                 document.getElementById('defaultLevel').value = config.defaultLevel || 3;
                 return true;
             } catch {
@@ -546,7 +550,6 @@
                 numTeams: parseInt(document.getElementById('numTeams').value) || 4,
                 playersPerTeam: parseInt(document.getElementById('playersPerTeam').value) || 6,
                 balanceGender: document.getElementById('balanceGender').checked,
-                autoFill: document.getElementById('autoFill').checked,
                 defaultLevel: parseInt(document.getElementById('defaultLevel').value) || 3
             };
             try {
@@ -559,7 +562,7 @@
         }
         
         // ============================================================
-        // PROCESSAR LISTA
+        // PROCESSAR LISTA - COM ESPERA
         // ============================================================
         function processPresence() {
             console.log('🔄 Processando lista...');
@@ -574,60 +577,57 @@
             let found = 0;
             const newPlayers = [];
             const updatedPlayers = [];
+            const esperaList = [];
+            
+            let isEsperaSection = false;
             
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
                 
-                // Procura por: número + nome + ✅ ou 👍
-                const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍])/);
+                // Detectar se entrou na seção "Espera"
+                if (trimmed.toLowerCase().includes('espera')) {
+                    isEsperaSection = true;
+                    continue;
+                }
+                
+                // Se for linha de espera (começa com número)
+                if (isEsperaSection) {
+                    const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍]?)/);
+                    if (match) {
+                        let name = match[2].trim();
+                        name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
+                        if (name && name.length >= 2) {
+                            esperaList.push(name);
+                            console.log(`⏳ Espera: ${name}`);
+                        }
+                    }
+                    continue;
+                }
+                
+                // Processar jogadores normais (fora da seção Espera)
+                const match = trimmed.match(/^(\d+)\s*[-.)]?\s*([A-Za-záéíóúãõâêîôûàèìòùç\s\.]+?)\s*([✅👍❌]?)/);
                 
                 if (match) {
-                    const name = match[2].trim();
-                    const cleanName = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
+                    let name = match[2].trim();
+                    const emoji = match[3] || '';
                     
-                    if (cleanName && cleanName.length >= 2) {
-                        console.log(`✅ Encontrado: ${cleanName}`);
-                        
-                        const existing = players.find(p => p.name.toLowerCase() === cleanName.toLowerCase());
-                        
-                        if (existing) {
-                            existing.confirmed = true;
-                            updatedPlayers.push(existing.name);
-                        } else {
-                            const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
-                            const position = autoAssignPosition(cleanName);
-                            newPlayers.push({
-                                name: cleanName,
-                                gender: Math.random() > 0.5 ? 'M' : 'F',
-                                position: position,
-                                level: defaultLevel,
-                                confirmed: true
-                            });
-                        }
-                        found++;
-                    }
-                }
-            }
-            
-            // Método alternativo
-            if (found === 0) {
-                console.log('🔄 Tentando método alternativo...');
-                
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed) continue;
-                    if (!/[✅👍]/.test(trimmed)) continue;
+                    const isConfirmed = /[✅👍]/.test(emoji);
+                    const isNotConfirmed = /[❌]/.test(emoji);
+                    const confirmed = isConfirmed && !isNotConfirmed;
                     
-                    let name = trimmed.replace(/^\d+\s*[-.)]?\s*/, '');
-                    name = name.replace(/[✅👍❌]/g, '').trim();
                     name = name.replace(/[^\w\sáéíóúãõâêîôûàèìòùç\-\.]/gi, '').trim();
                     
                     if (name && name.length >= 2) {
-                        console.log(`📝 Alternativo: ${name}`);
+                        console.log(`📝 ${confirmed ? '✅' : '❌'} ${name}`);
                         
                         const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
-                        if (!existing) {
+                        
+                        if (existing) {
+                            existing.confirmed = confirmed;
+                            existing.isEspera = false;
+                            updatedPlayers.push(existing.name);
+                        } else {
                             const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
                             const position = autoAssignPosition(name);
                             newPlayers.push({
@@ -635,11 +635,35 @@
                                 gender: Math.random() > 0.5 ? 'M' : 'F',
                                 position: position,
                                 level: defaultLevel,
-                                confirmed: true
+                                confirmed: confirmed,
+                                isEspera: false,
+                                isSubstituto: false
                             });
-                            found++;
                         }
+                        found++;
                     }
+                }
+            }
+            
+            // Adicionar jogadores da espera
+            for (const name of esperaList) {
+                const existing = players.find(p => p.name.toLowerCase() === name.toLowerCase());
+                if (!existing) {
+                    const defaultLevel = parseInt(document.getElementById('defaultLevel').value) || 3;
+                    const position = autoAssignPosition(name);
+                    newPlayers.push({
+                        name: name,
+                        gender: Math.random() > 0.5 ? 'M' : 'F',
+                        position: position,
+                        level: defaultLevel,
+                        confirmed: true,
+                        isEspera: true,
+                        isSubstituto: false
+                    });
+                    console.log(`⏳ Adicionado da espera: ${name}`);
+                } else {
+                    existing.isEspera = true;
+                    existing.confirmed = true;
                 }
             }
             
@@ -651,11 +675,12 @@
             updateUI();
             
             const confirmedCount = players.filter(p => p.confirmed).length;
+            const esperaCount = players.filter(p => p.isEspera).length;
             
-            let msg = `✅ Processado! ${found} jogadores confirmados encontrados.`;
-            msg += `\nTotal: ${confirmedCount} jogadores.`;
-            if (newPlayers.length > 0) msg += `\nNovos: ${newPlayers.length}`;
-            if (updatedPlayers.length > 0) msg += `\nAtualizados: ${updatedPlayers.length}`;
+            let msg = `✅ Processado! ${found} jogadores encontrados.`;
+            msg += `\n✅ Confirmados: ${confirmedCount}`;
+            msg += `\n⏳ Espera: ${esperaCount}`;
+            if (newPlayers.length > 0) msg += `\n🆕 Novos: ${newPlayers.length}`;
             
             console.log(msg);
             showToast(msg);
@@ -663,16 +688,13 @@
         }
         
         // ============================================================
-        // ATRIBUIR POSIÇÃO (Apenas 2 opções)
+        // ATRIBUIR POSIÇÃO
         // ============================================================
         function autoAssignPosition(name) {
             const nameLower = name.toLowerCase();
-            
             if (nameLower.includes('levanta') || nameLower.includes('setter') || nameLower.includes('armador')) {
                 return 'Levantador';
             }
-            
-            // Distribuição: 20% levantador, 80% passador
             return Math.random() < 0.2 ? 'Levantador' : 'Passador';
         }
         
@@ -682,7 +704,6 @@
                 return;
             }
             
-            // Distribuição: 20% Levantador, 80% Passador
             const shuffled = shuffle([...players]);
             const total = shuffled.length;
             const numSetters = Math.max(1, Math.round(total * 0.2));
@@ -701,24 +722,58 @@
         }
         
         // ============================================================
-        // GERAR TIMES
+        // GERAR TIMES - COM ESPERA E SUBSTITUTOS
         // ============================================================
         function generateTeams() {
             const numTeams = parseInt(document.getElementById('numTeams').value) || 4;
             const playersPerTeam = parseInt(document.getElementById('playersPerTeam').value) || 6;
             const balanceGender = document.getElementById('balanceGender').checked;
-            const autoFill = document.getElementById('autoFill').checked;
             const totalNeeded = numTeams * playersPerTeam;
             
-            let available = players.filter(p => p.confirmed !== false);
+            // Pegar apenas CONFIRMADOS (✅ ou 👍)
+            let available = players.filter(p => p.confirmed === true);
             
-            console.log(`👥 Jogadores disponíveis: ${available.length}`);
+            console.log(`👥 Confirmados: ${available.length}`);
+            console.log(`⏳ Espera: ${players.filter(p => p.isEspera).length}`);
             
-            if (available.length < totalNeeded && autoFill) {
+            // Se não houver confirmados suficientes, usar os da espera
+            if (available.length < totalNeeded) {
+                const espera = players.filter(p => p.isEspera === true);
                 const needed = totalNeeded - available.length;
-                console.log(`➕ Adicionando ${needed} jogadores fictícios`);
-                addFakePlayersInternal(needed);
-                available = players.filter(p => p.confirmed !== false);
+                const toAdd = Math.min(needed, espera.length);
+                for (let i = 0; i < toAdd; i++) {
+                    available.push(espera[i]);
+                }
+                console.log(`⏳ Adicionados ${toAdd} da espera`);
+            }
+            
+            // Se ainda faltar, adicionar "Jogador Substituto"
+            let substitutosCount = 0;
+            while (available.length < totalNeeded) {
+                const gender = balanceGender ? 
+                    (available.filter(p => p.gender === 'F').length < Math.floor(totalNeeded / 2) ? 'F' : 'M') :
+                    (Math.random() > 0.5 ? 'M' : 'F');
+                
+                // Verificar se já tem levantador suficiente
+                const settersCount = available.filter(p => p.position === 'Levantador').length;
+                const neededSetters = Math.ceil(available.length / playersPerTeam);
+                let pos = 'Passador';
+                if (settersCount < neededSetters) {
+                    pos = 'Levantador';
+                }
+                
+                substitutosCount++;
+                available.push({
+                    name: `Jogador Substituto ${substitutosCount}`,
+                    gender: gender,
+                    position: pos,
+                    level: 3,
+                    confirmed: true,
+                    isEspera: false,
+                    isSubstituto: true,
+                    fake: true
+                });
+                console.log(`🔄 Adicionado substituto ${substitutosCount}`);
             }
             
             if (available.length < totalNeeded) {
@@ -821,7 +876,6 @@
                         (teams[i].femaleCount < Math.floor(playersPerTeam / 2) ? 'F' : 'M') :
                         (Math.random() > 0.5 ? 'M' : 'F');
                     
-                    // Se não tiver levantador, coloca um
                     let pos = 'Passador';
                     if (!teams[i].hasSetter) {
                         pos = 'Levantador';
@@ -830,12 +884,13 @@
                     
                     const level = Math.floor(Math.random() * 3) + 2;
                     teams[i].players.push({
-                        name: `Jog ${teams[i].players.length + 1}`,
+                        name: `Jogador Substituto ${teams[i].players.length + 1}`,
                         gender: gender,
                         position: pos,
                         level: level,
                         confirmed: true,
-                        fake: true
+                        fake: true,
+                        isSubstituto: true
                     });
                     teams[i].totalLevel += level;
                     if (gender === 'F') teams[i].femaleCount++;
@@ -848,7 +903,7 @@
         }
         
         // ============================================================
-        // EXIBIR TIMES
+        // EXIBIR TIMES - SEM NÍVEL INDIVIDUAL
         // ============================================================
         function displayTeams() {
             const container = document.getElementById('teamsContainer');
@@ -858,7 +913,8 @@
             container.style.display = 'block';
             grid.innerHTML = '';
             
-            let output = '🏐 TIMES FORMADOS\n' + '='.repeat(40) + '\n\n';
+            let output = '🏐 TIMES FORMADOS\n';
+            output += '='.repeat(40) + '\n\n';
             
             teams.forEach((team, i) => {
                 const card = document.createElement('div');
@@ -876,8 +932,8 @@
                     </h3>
                     ${team.players.map(p => `
                         <div class="player">
-                            <span>${p.name} ${p.gender === 'F' ? '♀' : '♂'}${p.fake ? ' 🤖' : ''}</span>
-                            <span>${p.position} ${'⭐'.repeat(p.level)}</span>
+                            <span>${p.name} ${p.gender === 'F' ? '♀' : '♂'}${p.isSubstituto ? ' 🔄' : ''}</span>
+                            <span>${p.position}</span>
                         </div>
                     `).join('')}
                     <div class="avg">
@@ -888,12 +944,13 @@
                 `;
                 grid.appendChild(card);
                 
-                output += `TIME ${i + 1} (⭐${avg})\n`;
+                // TEXTO PARA COPIAR - SEM NÍVEL INDIVIDUAL
+                output += `TIME ${i + 1} (⭐ ${avg})\n`;
                 output += `${'-'.repeat(30)}\n`;
                 team.players.forEach(p => {
-                    output += `${p.name} (${p.gender === 'F' ? '♀' : '♂'}) - ${p.position} - ${'⭐'.repeat(p.level)}\n`;
+                    output += `${p.name} (${p.gender === 'F' ? '♀' : '♂'}) - ${p.position}${p.isSubstituto ? ' 🔄' : ''}\n`;
                 });
-                output += `👥 ${team.players.length} | 🏐${setters} Lev | ♀${team.femaleCount} ♂${team.maleCount}\n\n`;
+                output += `👥 ${team.players.length} | 🏐${setters} Lev | 🏐${passadores} Pas | ♀${team.femaleCount} ♂${team.maleCount}\n\n`;
             });
             
             textArea.value = output;
@@ -909,50 +966,6 @@
                 [array[i], array[j]] = [array[j], array[i]];
             }
             return array;
-        }
-        
-        function addFakePlayers() {
-            const totalNeeded = parseInt(document.getElementById('numTeams').value) * 
-                               parseInt(document.getElementById('playersPerTeam').value);
-            const confirmed = players.filter(p => p.confirmed !== false);
-            const needed = totalNeeded - confirmed.length;
-            if (needed <= 0) {
-                showToast('✅ Já temos jogadores suficientes!');
-                return;
-            }
-            addFakePlayersInternal(needed);
-            savePlayersToServer();
-            updateUI();
-            showToast(`✅ Adicionados ${needed} jogadores!`);
-        }
-        
-        function addFakePlayersInternal(count) {
-            const names = ['Ana', 'Bruno', 'Carla', 'Diego', 'Eduarda', 'Felipe', 'Gabriela', 'Henrique', 
-                          'Isabela', 'João', 'Karina', 'Lucas', 'Mariana', 'Nicolas', 'Olivia', 'Paulo',
-                          'Rafaela', 'Samuel', 'Tatiane', 'Victor', 'Yasmin', 'André', 'Beatriz', 'Carlos'];
-            const positions = ['Passador', 'Passador', 'Passador', 'Passador', 'Levantador'];
-            const existingNames = players.map(p => p.name);
-            
-            for (let i = 0; i < count; i++) {
-                let name;
-                let attempts = 0;
-                do {
-                    const baseName = names[Math.floor(Math.random() * names.length)];
-                    name = baseName + (Math.floor(Math.random() * 100) + 1);
-                    attempts++;
-                } while (existingNames.includes(name) && attempts < 50);
-                
-                const gender = Math.random() > 0.5 ? 'M' : 'F';
-                players.push({
-                    name: name,
-                    gender: gender,
-                    position: positions[Math.floor(Math.random() * positions.length)],
-                    level: Math.floor(Math.random() * 3) + 2,
-                    confirmed: true,
-                    fake: true
-                });
-                existingNames.push(name);
-            }
         }
         
         function removePlayer(index) {
@@ -1005,6 +1018,22 @@
                 div.className = 'player-item';
                 const isConfirmed = p.confirmed !== false;
                 
+                let statusLabel = '';
+                let statusClass = '';
+                if (p.isSubstituto) {
+                    statusLabel = '🔄 Substituto';
+                    statusClass = 'substituto';
+                } else if (p.isEspera) {
+                    statusLabel = '⏳ Espera';
+                    statusClass = 'espera';
+                } else if (isConfirmed) {
+                    statusLabel = '✅';
+                    statusClass = 'confirmed';
+                } else {
+                    statusLabel = '❌';
+                    statusClass = 'not-confirmed';
+                }
+                
                 const posClass = {
                     'Levantador': 'setter',
                     'Passador': 'passador'
@@ -1014,7 +1043,7 @@
                     <div class="info">
                         <span class="name">${p.name}</span>
                         <span class="gender">${p.gender === 'F' ? '♀' : '♂'}</span>
-                        <span class="${isConfirmed ? 'confirmed' : 'not-confirmed'}">${isConfirmed ? '✅' : '❌'}</span>
+                        <span class="${statusClass}">${statusLabel}</span>
                         <span class="position-tag ${posClass}">${p.position}</span>
                         <span class="stars">${'⭐'.repeat(p.level)}</span>
                         <select onchange="updatePlayer(${i}, 'position', this.value)">
@@ -1031,7 +1060,8 @@
                             <option value="M" ${p.gender === 'M' ? 'selected' : ''}>♂</option>
                             <option value="F" ${p.gender === 'F' ? 'selected' : ''}>♀</option>
                         </select>
-                        ${p.fake ? '🤖' : ''}
+                        ${p.isSubstituto ? '🔄' : ''}
+                        ${p.isEspera ? '⏳' : ''}
                     </div>
                     <button class="remove-btn" onclick="removePlayer(${i})">×</button>
                 `;
@@ -1085,7 +1115,7 @@
         14- ALEXANDRE ❌
         15- HELTON👍
         16- JAFLET ✅
-        17- TICO✅
+        17- TICO❌
         18- JHOSEPH ❌
         19- LUIX ❌
         20- MATHEUS ✅
@@ -1093,14 +1123,15 @@
         22- ISA ✅
         23- LYDI ✅
         24- GIOVANA❌
-        
+
         Diarista
         1-wesley
         2-rafa ✅
         3-weverton
         4- Santiago 
         5-
-        
+        6-
+
         Espera
         1-  
         2-
@@ -1120,7 +1151,7 @@
             await loadConfigFromServer();
             await loadPlayersFromServer();
             
-            document.querySelectorAll('#numTeams, #playersPerTeam, #balanceGender, #autoFill, #defaultLevel')
+            document.querySelectorAll('#numTeams, #playersPerTeam, #balanceGender, #defaultLevel')
                 .forEach(el => {
                     el.addEventListener('change', saveConfig);
                 });
